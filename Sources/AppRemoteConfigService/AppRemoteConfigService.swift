@@ -111,13 +111,22 @@ public class AppRemoteConfigService {
         Task { @MainActor in
             resolveAndApply(date: now)
   
-            try await update()
+            do {
+                try await update()
+            } catch {
+                logger.error("Updating failed \(error)")
+            }
         }
         
         // Trigger update on coming to foreground
-        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: self, queue: .main) { _ in
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: self, queue: .main) { [weak self] _ in
+            guard let self else { return }
             Task {
-                try await self.update(enteringForeground: true)
+                do {
+                    try await self.update(enteringForeground: true)
+                } catch {
+                    self.logger.error("Updating failed \(error)")
+                }
             }
         }
     }
