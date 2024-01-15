@@ -22,26 +22,24 @@ class ConfigurationService {
         self.url = url
         
 #if os(iOS) || os(tvOS)
-        let sub: Platform.IOS?
         switch UIDevice.current.userInterfaceIdiom {
         case .unspecified:
-            sub = nil
+            platform = .iOS
         case .phone:
-            sub = .phone
+            platform = .iOS_iPhone
         case .pad:
-            sub = .pad
+            platform = .iOS_iPad
         case .tv:
-            sub = .tv
+            platform = .iOS_tv
         case .carPlay:
-            sub = .carPlay
+            platform = .iOS_carplay
         case .mac:
-            sub = .mac
+            platform = .iOS_mac
         case .vision:
-            sub = nil
+            platform = .visionOS
         @unknown default:
-            sub = nil
+            platform = .unknown
         }
-        platform = .iOS(sub)
         platformVersion = try! Version(UIDevice.current.systemVersion)
 #elseif os(macOS)
         platform = .macOS

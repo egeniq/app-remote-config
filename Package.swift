@@ -7,8 +7,16 @@
 import PackageDescription
 import Foundation
 
+/* Default approach
 // Set SKIP_ZERO=1 to build without Skip libraries
 let zero = ProcessInfo.processInfo.environment["SKIP_ZERO"] != nil
+*/
+
+// The default approach means upstream defaults to using Skip, which we don't want.
+// Set USE_SKIP=1 to build with Skip libraries
+let useSkip = ProcessInfo.processInfo.environment["USE_SKIP"] != nil
+let zero = !useSkip
+
 let skipstone = !zero ? [Target.PluginUsage.plugin(name: "skipstone", package: "skip")] : []
 
 let package = Package(
@@ -16,7 +24,18 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.iOS(.v15), .macOS(.v13), .tvOS(.v16), .watchOS(.v9), .macCatalyst(.v16)],
     products: [
-        .library(name: "AppRemoteConfig", targets: ["AppRemoteConfig"]),
+        .library(
+            name: "AppRemoteConfig",
+            targets: ["AppRemoteConfig"]
+        ),
+        .library(
+            name: "AppRemoteConfigClient",
+            targets: ["AppRemoteConfigClient"]
+        ),
+        .executable(
+            name: "care",
+            targets: ["care"]
+        )
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),

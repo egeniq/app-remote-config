@@ -24,9 +24,14 @@ public struct Version: Equatable, Comparable {
     }
     
     public init(_ rawValue: String) throws {
+        #if os(Android)
         var trimmedValue = rawValue
         trimmedValue
             .trimPrefix(while: { !"1234567890.".contains($0) })
+        #else
+        let trimmedValue = rawValue
+            .trimmingCharacters(in: CharacterSet(charactersIn: "1234567890.").inverted)
+        #endif
         let parts = trimmedValue
             .split(separator: ".")
             .compactMap { Int($0) }
