@@ -118,6 +118,7 @@ public class AppRemoteConfigService {
             }
         }
         
+#if os(iOS) || os(tvOS)
         // Trigger update on coming to foreground
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: self, queue: .main) { [weak self] _ in
             guard let self else { return }
@@ -129,6 +130,7 @@ public class AppRemoteConfigService {
                 }
             }
         }
+#endif
     }
     
     var bundledURL: URL {
@@ -157,10 +159,12 @@ public class AppRemoteConfigService {
                 return
             }
             if !enteringForeground {
+#if os(iOS) || os(tvOS)
                 guard await UIApplication.shared.applicationState == .background else {
                     logger.debug("Skipping updating from remote: app in background")
                     return
                 }
+#endif
             }
         }
         logger.debug("Updating from remote")
