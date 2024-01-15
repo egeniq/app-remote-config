@@ -49,7 +49,7 @@ extension Care {
                  
                 # Or release a new feature at a specific time
                 - schedule:
-                  - from: '2024-01-12T00:00:00Z'
+                    from: '2024-12-31T00:00:00Z'
                   settings:
                     coolFeature: true
                     
@@ -89,11 +89,9 @@ extension Care {
                             }
                         },
                         {
-                            "schedule": [
-                                {
-                                    "from": "2024-01-12T00:00:00Z"
-                                }
-                            ],
+                            "schedule": {
+                                "from": "2024-12-31T00:00:00Z"
+                            },
                             "settings": {
                                 "coolFeature": true
                             }
