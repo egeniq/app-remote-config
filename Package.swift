@@ -29,8 +29,8 @@ let package = Package(
             targets: ["AppRemoteConfig"]
         ),
         .library(
-            name: "AppRemoteConfigClient",
-            targets: ["AppRemoteConfigClient"]
+            name: "AppRemoteConfigService",
+            targets: ["AppRemoteConfigService"]
         ),
         .executable(
             name: "care",
@@ -41,7 +41,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.6"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-perception", from: "1.0.0"),
         .package(url: "https://github.com/tgrapperon/swift-dependencies-additions", from: "1.0.0"),
         .package(url: "https://source.skip.tools/skip-foundation.git", from: "0.0.0"),
         .package(url: "https://source.skip.tools/skip.git", from: "0.7.45"),
@@ -58,13 +57,11 @@ let package = Package(
             plugins: skipstone
         ),
         .target(
-            name: "AppRemoteConfigClient",
+            name: "AppRemoteConfigService",
             dependencies: [
                 "AppRemoteConfig",
                 .product(name: "Dependencies", package: "swift-dependencies"),
-                .product(name: "DependenciesAdditions", package: "swift-dependencies-additions"),
-                .product(name: "DependenciesMacros", package: "swift-dependencies"),
-                .product(name: "Perception", package: "swift-perception")
+                .product(name: "DependenciesAdditions", package: "swift-dependencies-additions")
             ]),
         .executableTarget(
             name: "care",
