@@ -1,0 +1,91 @@
+{
+  "$id": "https://egeniq.com/appremoteconfig.schema.json",
+  "title": "App Remote Config",
+  "type": "object",
+  "description": "A simple but effective way to manage apps remotely. A simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.",
+  "properties": {
+    "settings": {
+      "type": "object",
+      "description": "The default settings that an app should use."
+    },
+    "deprecatedKeys": {
+      "type": "array",
+      "description": "Keys that are no longer in use, but may still be used by overrides to accomodate older versions of an app.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+       },        
+     "uniqueItems": true
+    },
+    "overrides": {
+      "type": "array",
+      "description": "Overrides containing the settings to apply when they match and/or are scheduled. Applied from top to bottom.",
+      "items": {
+        "type": "object",
+        "description": "Overrides containing the settings to apply when it matches and/or is scheduled.",
+        "properties": {
+          "matching": {
+            "type": "array",
+            "description": "To be considered an override should match at least one of conditions.",
+            "items": {
+              "type":"object",
+              "description": "To be considered a match, the condition should match all properties.",
+              "properties": {
+                "platform": {
+                  "enum": ["iOS", "iOS.iPhone", "iOS.iPad", "iOS.TV", "iOS.CarPlay", "iOS.Mac", "macOS", "watchOS", "visionOS", "Android", "Android.phone", "Andriod.tablet", "Android.TV", "WearOS"],
+                  "description": "The platform the app is running on. "
+                },
+                "platformVersion": {
+                  "type": "string",
+                  "description": "The semantic version of platform the app is running on. Ranges are supported: =1.0.0, >1.0.0, >=1.0.0, <1.0.0, <=1.0.0, 1.0.0-2.0.0, 1.0.0>-2.0.0, 1.0.0-<2.0.0, 1.0.0>-<2.0.0."
+                }, 
+                "appVersion": {
+                  "type": "string",
+                  "description": "The semantic version of the app. Ranges are supported: =1.0.0, >1.0.0, >=1.0.0, <1.0.0, <=1.0.0, 1.0.0-2.0.0, 1.0.0>-2.0.0, 1.0.0-<2.0.0, 1.0.0>-<2.0.0."
+                },    
+                "variant": {
+                  "type": "string",
+                  "description": "The variant of the app.",
+                  "minLength": 2
+                },
+                "buildVariant": {
+                  "enum": ["debug", "release"],
+                  "description": "The build variant of the app."
+                },     
+                "language": {
+                  "type": "string",
+                  "description": "The language the app is using currently as two character code.",
+                  "minLength": 2,
+                  "maxLength": 2
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "schedule": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "description": "Date-time in ISO8601 format from which onwards the settings should be applied."
+              },
+              "until": {
+                "type": "string",
+                "description": "Date-time in ISO8601 format from which onwards the settings should not be applied anymore."
+              }
+            }
+          },
+          "settings": {
+            "type": "object",
+            "description": "The additional settings that are applied when the override is applied. The keys should be either in use or listed as deprecated."
+          }
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "description": "Store metadata such as author or last updated date here."
+    }
+  },
+  "required": [ "settings" ]
+}
