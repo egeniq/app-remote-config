@@ -79,7 +79,7 @@ final class AppRemoteConfigTests: XCTestCase {
          }
          """
         let data = jsonString.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: data, options: .json5Allowed) as! [String: Any]
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
         
         let date = Date(timeIntervalSince1970: 0)
         let config = try Config(json: json)
@@ -113,7 +113,7 @@ final class AppRemoteConfigTests: XCTestCase {
         }
         """
         let data = jsonString.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: data, options: .json5Allowed) as! [String: Any]
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
         
         let date = Date(timeIntervalSince1970: 0)
         let config = try Config(json: json)
@@ -144,7 +144,7 @@ final class AppRemoteConfigTests: XCTestCase {
         }
         """
         let data = jsonString.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: data, options: .json5Allowed) as! [String: Any]
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
         
         let date = Date(timeIntervalSince1970: 0)
         let config = try Config(json: json)
@@ -211,7 +211,7 @@ final class AppRemoteConfigTests: XCTestCase {
         }
         """
         let data = jsonString.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: data, options: .json5Allowed) as! [String: Any]
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
         
         let date = Date(timeIntervalSince1970: 0)
         let config = try Config(json: json)
