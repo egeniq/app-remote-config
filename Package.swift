@@ -44,6 +44,7 @@ if android {
     package = Package(
         name: "AppRemoteConfig",
         defaultLocalization: "en",
+        platforms: [.iOS(.v15), .macOS(.v13), .tvOS(.v16), .watchOS(.v9), .macCatalyst(.v16)],
         products: [
             .library(
                 name: "AppRemoteConfig",

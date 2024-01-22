@@ -9,7 +9,6 @@ final class AppRemoteConfigTests: XCTestCase {
         let jsonString = """
          {
              "settings": {
-                 // General
                  "foo": true,
                  "bar": "hello world",
                  "baz": [
@@ -17,7 +16,6 @@ final class AppRemoteConfigTests: XCTestCase {
                          "abc": "def"
                      }
                  ],
-                 // Update
                  "updateRequired": false,
                  "updateRecommended": false,
                  "appDisabled": false
@@ -41,10 +39,9 @@ final class AppRemoteConfigTests: XCTestCase {
                      "matching": [
                          {
                              "platform": "ios",
-                             // "othe": [2, 0, 0],
                              "appVersionCode": 123,
                              "versionName": "String",
-                             "appVersion": "2.0.0"  // 2 -> 2.0.0 2.0 -> 2.0.0  2.0.0-beta
+                             "appVersion": "2.0.0"
                          }
                      ],
                      "schedule": {
@@ -72,7 +69,6 @@ final class AppRemoteConfigTests: XCTestCase {
              ],
              "meta": {
                  "updated": "2024-01-08T12:00:00Z",
-                 // "sequence"
                  "author": "Johan",
                  "client": "Secret Agency"
              }
