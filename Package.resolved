@@ -10,42 +10,6 @@
       }
     },
     {
-      "identity" : "skip",
-      "kind" : "remoteSourceControl",
-      "location" : "https://source.skip.tools/skip.git",
-      "state" : {
-        "revision" : "3423170e76e40c670c913eb6823f64f21d752d7c",
-        "version" : "0.7.45"
-      }
-    },
-    {
-      "identity" : "skip-foundation",
-      "kind" : "remoteSourceControl",
-      "location" : "https://source.skip.tools/skip-foundation.git",
-      "state" : {
-        "revision" : "bd1132373b760bafd5357d8f99bada69ead134b9",
-        "version" : "0.4.1"
-      }
-    },
-    {
-      "identity" : "skip-lib",
-      "kind" : "remoteSourceControl",
-      "location" : "https://source.skip.tools/skip-lib.git",
-      "state" : {
-        "revision" : "062655414c23ac114e265e3624d145628504e78b",
-        "version" : "0.6.1"
-      }
-    },
-    {
-      "identity" : "skip-unit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://source.skip.tools/skip-unit.git",
-      "state" : {
-        "revision" : "767199e86fab3bab4b3cf7cebcd8bccc0b658a75",
-        "version" : "0.4.8"
-      }
-    },
-    {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser",

@@ -37,7 +37,7 @@ extension Care {
             
             var object: [String: Any]
             
-            if let jsonObject = try? JSONSerialization.jsonObject(with: data, options: .json5Allowed) {
+            if let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []) {
                 if let jsonDict = jsonObject as? [String: Any] {
                     object = jsonDict
                 } else {

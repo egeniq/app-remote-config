@@ -1,25 +1,107 @@
 # AppRemoteConfig
 
-This is a [Skip](https://skip.tools) Swift/Kotlin library project containing the following modules:
+Configure apps remotely: A simple but effective way to manage apps remotely.
 
-AppRemoteConfig
+Create a simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.
 
-## Building
+## Schema
 
-This project is a Swift Package Manager module that uses the
-[Skip](https://skip.tools) plugin to transpile Swift into Kotlin.
+The JSON/YAML schema is defined [here](Schema/appremoteconfig.schema).
 
-Building the module requires that Skip be installed using 
-[Homebrew](https://brew.sh) with `brew install skiptools/skip/skip`.
-This will also install the necessary build prerequisites:
-Kotlin, Gradle, and the Android build tools.
+## CLI Utility
 
-## Testing
+Use the `care` CLI utility to initialize, verify, resolve and prepare configuration files.
 
-The module can be tested using the standard `swift test` command
-or by running the test target for the macOS destination in Xcode,
-which will run the Swift tests as well as the transpiled
-Kotlin JUnit tests in the Robolectric Android simulation environment.
+## Multiplatform
 
-Parity testing can be performed with `skip test`,
-which will output a table of the test results for both platforms.
+### Swift
+
+Import the package in your `Package.swift` file:
+
+    .package(url: "https://github.com/egeniq/app-remote-config", branch: "develop"),
+
+Then a good approach is to create your own `AppRemoteConfigClient`.
+
+    // App Remote Config
+    .target(
+        name: "AppRemoteConfigClient",
+        dependencies: [
+            .product(name: "AppRemoteConfigService", package: "app-remote-config"),
+            .product(name: "Dependencies", package: "swift-dependencies"),
+            .product(name: "DependenciesAdditions", package: "swift-dependencies-additions"),
+            .product(name: "DependenciesMacros", package: "swift-dependencies"),
+            .product(name: "Perception", package: "swift-perception")
+        ]
+    )
+        
+Using these dependencies:
+
+    .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.0.0"),
+    .package(url: "https://github.com/pointfreeco/swift-perception", from: "1.0.0"),
+    .package(url: "https://github.com/tgrapperon/swift-dependencies-additions", from: "1.0.0")
+     
+Then your `AppRemoteConfigClient.swift` is something like this:
+        
+    import AppRemoteConfigService
+    import Dependencies
+    import DependenciesMacros
+    import Foundation
+    import Perception
+
+    @Perceptible
+    public class Values {
+        public private(set) var updateRecommended: Bool = false
+        public private(set) var updateRequired: Bool = false
+        
+        func apply(settings: [String: Any]) {
+            if let newValue = settings["updateRecommended"] as? Bool {
+                updateRecommended = newValue
+            }
+            if let newValue = settings["updateRequired"] as? Bool {
+                updateRequired = newValue
+            }
+        }
+    }
+
+    @DependencyClient
+    public struct AppRemoteConfigClient {
+        public var values: () -> Values = { Values() }
+    }
+
+    extension DependencyValues {
+        public var configClient: AppRemoteConfigClient {
+            get { self[AppRemoteConfigClient.self] }
+            set { self[AppRemoteConfigClient.self] = newValue }
+        }
+    }
+
+    extension AppRemoteConfigClient: TestDependencyKey {
+        public static let testValue = Self()
+    }
+
+    extension AppRemoteConfigClient: DependencyKey {
+        public static let liveValue = {
+            let url = URL(string: "https://www.example.com/config.json")!
+            let values = Values()
+            let service = AppRemoteConfigService(url: url) {
+                values.apply(settings: $0)
+            }
+            return Self(values: { values })
+        }()
+    }
+
+### Android
+
+WORK IN PROGRESS
+
+You can compile the `AppRemoteConfig` module for Android using [Scade](https://www.scade.io).
+
+    ANDROID=1 /Applications/Scade.app/Contents/PlugIns/ScadeSDK.plugin/Contents/Resources/Libraries/scd/bin/scd \
+        archive \
+        --type android-aar \
+        --path . \
+        --platform android-arm64-v8a \
+        --platform android-x86_64 \
+        --android-ndk ~/Library/Android/sdk/ndk/26.1.10909125 \
+        --generate-android-manifest \
+        --android-gradle /Applications/Scade.app/Contents/PlugIns/ScadeSDK.plugin/Contents/Resources/Libraries/ScadeSDK/thirdparty/gradle

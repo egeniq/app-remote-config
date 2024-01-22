@@ -146,7 +146,7 @@ public class AppRemoteConfigService {
     }
     
     private func readConfig(from data: Data) throws {
-        guard let json = try JSONSerialization.jsonObject(with: data, options: .json5Allowed) as? [String: Any] else {
+        guard let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
             throw AppRemoteConfigServiceError.unexpectedType
         }
         config = try Config(json: json)
