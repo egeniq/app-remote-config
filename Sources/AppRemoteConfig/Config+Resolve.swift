@@ -28,13 +28,7 @@ extension Config {
             }
             
             if isScheduled && matches {
-#if os(Android)
-                for (key, value) in override.settings.enumerated() {
-                    partialResult[key] = value
-                }
-#else
                 partialResult.merge(override.settings) { _, override in override }
-#endif
             }
         }
     }
