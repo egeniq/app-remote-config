@@ -9,7 +9,7 @@ import AppRemoteConfig
 @MainActor
 public func downloadData(activity: JObject, url: String) async {
     do {
-        let r = try Config(json: ["settings": ["foo": 41]])
+        let r = try Config(json: ["settings": ["bar": 43]])
         let res = r.resolve(date: Date(), platform: .android, platformVersion: try! Version("1.0.0"), appVersion: try! Version("1.0.0"), buildVariant: .release)
         activity.call(method: "onDataLoaded", "\(res)")
     }

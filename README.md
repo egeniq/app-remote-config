@@ -6,7 +6,7 @@ Create a simple configuration file that is easy to maintain and host, yet provid
 
 ## Schema
 
-The JSON/YAML schema is defined [here](Schema/appremoteconfig.schema).
+The JSON/YAML schema is defined [here](Schema/appremoteconfig.schema.json).
 
 ## CLI Utility
 
