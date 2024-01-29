@@ -82,7 +82,7 @@ public class AppRemoteConfigService {
         buildVariant = .release
 #endif
         
-        if #available(iOS 16, macOS 13, *) {
+        if #available(iOS 16, macOS 13, tvOS 16, watchOS 9, *) {
             language = Locale.current.language.languageCode?.identifier
         } else {
             // Fallback on earlier versions
