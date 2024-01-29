@@ -2,7 +2,7 @@ import Foundation
 
 extension Config {
     
-    public func resolve(date: Date, platform: Platform, platformVersion: Version, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [String: Any] {
+    public func resolve(date: Date, platform: Platform, platformVersion: OperatingSystemVersion, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [String: Any] {
         overrides.reduce(into: settings) { partialResult, override in
             let isScheduled: Bool
             if let schedule = override.schedule {
@@ -33,7 +33,7 @@ extension Config {
         }
     }
     
-    public func relevantResolutionDates(platform: Platform, platformVersion: Version, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [Date] {
+    public func relevantResolutionDates(platform: Platform, platformVersion: OperatingSystemVersion, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [Date] {
         overrides.reduce(into: [Date](), { partialResult, override in
             guard let schedule = override.schedule else {
                return

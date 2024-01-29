@@ -6,7 +6,7 @@ Create a simple configuration file that is easy to maintain and host, yet provid
 
 ## Schema
 
-The JSON/YAML schema is defined [here](Schema/appremoteconfig.schema).
+The JSON/YAML schema is defined [here](./Schema/appremoteconfig.schema.json).
 
 ## CLI Utility
 
@@ -26,6 +26,7 @@ Then a good approach is to create your own `AppRemoteConfigClient`.
     .target(
         name: "AppRemoteConfigClient",
         dependencies: [
+            .product(name: "AppRemoteConfigMacros", package: "app-remote-config"),
             .product(name: "AppRemoteConfigService", package: "app-remote-config"),
             .product(name: "Dependencies", package: "swift-dependencies"),
             .product(name: "DependenciesAdditions", package: "swift-dependencies-additions"),
@@ -43,24 +44,16 @@ Using these dependencies:
 Then your `AppRemoteConfigClient.swift` is something like this:
         
     import AppRemoteConfigService
+    import AppRemoteConfigMacros
     import Dependencies
     import DependenciesMacros
     import Foundation
     import Perception
 
-    @Perceptible
+    @AppRemoteConfigValues @Perceptible
     public class Values {
         public private(set) var updateRecommended: Bool = false
         public private(set) var updateRequired: Bool = false
-        
-        func apply(settings: [String: Any]) {
-            if let newValue = settings["updateRecommended"] as? Bool {
-                updateRecommended = newValue
-            }
-            if let newValue = settings["updateRequired"] as? Bool {
-                updateRequired = newValue
-            }
-        }
     }
 
     @DependencyClient
@@ -83,9 +76,7 @@ Then your `AppRemoteConfigClient.swift` is something like this:
         public static let liveValue = {
             let url = URL(string: "https://www.example.com/config.json")!
             let values = Values()
-            let service = AppRemoteConfigService(url: url) {
-                values.apply(settings: $0)
-            }
+            let service = AppRemoteConfigService(url: url, apply: values.apply(settings:))
             return Self(values: { values })
         }()
     }
@@ -94,9 +85,13 @@ Then your `AppRemoteConfigClient.swift` is something like this:
 
 WORK IN PROGRESS
 
+Rename Package.swift to Package-Backup.swift.
+
+Rename Package-Android.swift to Package.swift.
+
 You can compile the `AppRemoteConfig` module for Android using [Scade](https://www.scade.io).
 
-    ANDROID=1 /Applications/Scade.app/Contents/PlugIns/ScadeSDK.plugin/Contents/Resources/Libraries/scd/bin/scd \
+    /Applications/Scade.app/Contents/PlugIns/ScadeSDK.plugin/Contents/Resources/Libraries/scd/bin/scd \
         archive \
         --type android-aar \
         --path . \

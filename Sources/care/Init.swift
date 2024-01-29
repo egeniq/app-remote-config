@@ -24,6 +24,10 @@ extension Care {
             switch kind {
             case .yaml:
                 let yaml = """
+                # yaml-language-server: $schema=./appremoteconfig.schema.json
+
+                $schema: ./appremoteconfig.schema.json
+                
                 # Settings for the current app.
                 settings:
                   foo: 42
@@ -61,6 +65,7 @@ extension Care {
             case .json:
                 let json = """
                 {
+                    "$schema": "./appremoteconfig.schema.json",
                     "settings": {
                         "coolFeature": false,
                         "foo": 42

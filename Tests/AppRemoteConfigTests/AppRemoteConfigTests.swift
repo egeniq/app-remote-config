@@ -79,7 +79,7 @@ final class AppRemoteConfigTests: XCTestCase {
         
         let date = Date(timeIntervalSince1970: 0)
         let config = try Config(json: json)
-        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("1.0.0"), buildVariant: .release)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Bool
         XCTAssertEqual(foo, false)
@@ -113,7 +113,7 @@ final class AppRemoteConfigTests: XCTestCase {
         
         let date = Date(timeIntervalSince1970: 0)
         let config = try Config(json: json)
-        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("1.0.0"), buildVariant: .release)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
         XCTAssertEqual(foo, 2)
@@ -146,31 +146,31 @@ final class AppRemoteConfigTests: XCTestCase {
         let config = try Config(json: json)
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("0.6.9"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.6.9"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 1)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("0.7.0"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.7.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 2)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("0.8.123"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.8.123"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 2)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("1.0.0"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 2)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("1.0.1"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.1"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 1)
         }
@@ -213,31 +213,31 @@ final class AppRemoteConfigTests: XCTestCase {
         let config = try Config(json: json)
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("0.6.9"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.6.9"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 1)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("0.7.0"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.7.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 2)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("0.8.123"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.8.123"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 2)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("1.0.0"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 3)
         }
         
         do {
-            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: Version("16.0.1"), appVersion: Version("1.0.1"), buildVariant: .release)
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.1"), buildVariant: .release)
             let foo = settings["foo"] as! Int
             XCTAssertEqual(foo, 1)
         }
