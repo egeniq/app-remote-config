@@ -118,7 +118,7 @@ struct Condition {
         matchNever = false
     }
     
-    func matches(platform: Platform, platformVersion: Version, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String?) -> Bool {
+    func matches(platform: Platform, platformVersion: OperatingSystemVersion, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String?) -> Bool {
         if matchNever {
             return false
         }
@@ -127,7 +127,7 @@ struct Condition {
             return false
         }
         
-        if let platformVersionToMatch = self.platformVersion, !platformVersionToMatch.contains(platformVersion) {
+        if let platformVersionToMatch = self.platformVersion, !platformVersionToMatch.contains(Version(platformVersion)) {
             return false
         }
         

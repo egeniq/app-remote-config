@@ -77,7 +77,7 @@ extension Care {
             } else {
                 parsedDate = Date()
             }
-            let platformVersion = try Version(platformVersion)
+            let platformVersion = try Version(platformVersion).operatingSystemVersion
             let appVersion = try Version(appVersion)
             
             var relevantResolutionDates = config.relevantResolutionDates(
@@ -93,7 +93,7 @@ extension Care {
             
             print("Resolving for:")
             print("  platform            : \(platform.rawValue)")
-            print("  platform version    : \(platformVersion.rawValue)")
+            print("  platform version    : \(platformVersion.majorVersion).\(platformVersion.minorVersion).\(platformVersion.patchVersion)")
             print("  app version         : \(appVersion.rawValue)")
             if let variant {
                 print("  variant             : \(variant)")

@@ -14,12 +14,11 @@ public class AppRemoteConfigService {
     let url: URL
     let minimumRefreshInterval: TimeInterval
     let automaticRefreshInterval: TimeInterval
-    let includedConfigName: String
-    let includedConfigExtension: String
+    let bundledConfigURL: URL?
     let apply: (_ settings: [String: Any]) -> ()
     
     let platform: Platform
-    let platformVersion: Version
+    let platformVersion: OperatingSystemVersion
     let appVersion: Version
     let buildVariant: BuildVariant
     let language: String?
@@ -36,15 +35,13 @@ public class AppRemoteConfigService {
         url: URL,
         minimumRefreshInterval: TimeInterval = 60,
         automaticRefreshInterval: TimeInterval = 300,
-        includedConfigName: String = "appconfig",
-        includedConfigExtension: String = "json",
+        bundledConfigURL: URL? = nil,
         apply: @escaping (_ settings: [String: Any]) -> ()
     ) {
         self.url = url
         self.minimumRefreshInterval = minimumRefreshInterval
         self.automaticRefreshInterval = automaticRefreshInterval
-        self.includedConfigName = includedConfigName
-        self.includedConfigExtension = includedConfigExtension
+        self.bundledConfigURL = bundledConfigURL
         self.apply = apply
         
 #if os(iOS) || os(tvOS)
@@ -66,10 +63,8 @@ public class AppRemoteConfigService {
         @unknown default:
             platform = .unknown
         }
-        platformVersion = try! Version(UIDevice.current.systemVersion)
 #elseif os(macOS)
         platform = .macOS
-        platformVersion = try! Version("1.0.0")
 #elseif os(watchOS)
         platform = .watchOS
 #elseif os(visionOS)
@@ -77,6 +72,7 @@ public class AppRemoteConfigService {
 #else
         platform = .unknown
 #endif
+        platformVersion = ProcessInfo().operatingSystemVersion
         
         let appVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         appVersion = try! Version(appVersionString)
@@ -93,10 +89,14 @@ public class AppRemoteConfigService {
             language = Locale.current.languageCode
         }
         
-        logger.debug("Reading bundled fallback")
-        // This is force unwrapped because the included fallback config must parse without issue
-        let data = try! Data(contentsOf: bundledURL)
-        try! readConfig(from: data)
+        if let bundledConfigURL {
+            logger.debug("Reading bundled fallback")
+            // This is force unwrapped because the included fallback config must parse without issue
+            let data = try! Data(contentsOf: bundledConfigURL)
+            try! readConfig(from: data)
+        } else {
+            logger.debug("No bundled config provided")
+        }
         
         do {
             if let localCacheURL {
@@ -133,16 +133,11 @@ public class AppRemoteConfigService {
 #endif
     }
     
-    var bundledURL: URL {
-        // This is force unwrapped because the fallback config must be included
-        Bundle.main.url(forResource: includedConfigName, withExtension: includedConfigExtension)!
-    }
-    
     var localCacheURL: URL? {
         guard let path = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first else {
             return nil
         }
-        return URL(fileURLWithPath: path + "/" + includedConfigName + "." + includedConfigExtension)
+        return URL(fileURLWithPath: path + "/appremoteconfig")
     }
     
     private func readConfig(from data: Data) throws {

@@ -42,5 +42,13 @@ public struct Version: Equatable, Comparable {
         let padded = parts + Array(repeating: 0, count: max(3 - parts.count, 0))
         canonical = (padded[0], padded[1], padded[2])
     }
+    
+    public init(_ version: OperatingSystemVersion) {
+        canonical = (version.majorVersion, version.minorVersion, version.patchVersion)
+    }
+    
+    public var operatingSystemVersion: OperatingSystemVersion {
+        .init(majorVersion: canonical.0, minorVersion: canonical.1, patchVersion: canonical.2)
+    }
 }
 
