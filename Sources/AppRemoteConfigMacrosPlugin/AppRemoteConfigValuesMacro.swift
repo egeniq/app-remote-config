@@ -121,8 +121,9 @@ public enum AppRemoteConfigValuesMacro: MemberMacro {
             
             let typeAnnotation = property.bindings.first?.typeAnnotation?.type
             let initializerValue = property.bindings.first?.initializer?.value
+            let isLet = property.bindingSpecifier.tokenKind == .keyword(.let)
             properties.append(
-                Property(declaration: property, identifier: identifier, typeAnnotation: typeAnnotation, initializerValue: initializerValue)
+                Property(declaration: property, identifier: identifier, typeAnnotation: typeAnnotation, initializerValue: initializerValue, isLet: isLet)
             )
         }
         let access = accesses.min().flatMap { $0.token?.with(\.trailingTrivia, .space) }
@@ -137,15 +138,38 @@ public enum AppRemoteConfigValuesMacro: MemberMacro {
             \(raw: $0.map { "self.\($0.identifier) = \($0.identifier)" }.joined(separator: "\n"))
             }
             
-            func apply(settings: [String: Any]) {
-            \(raw: $0.map {
+            func apply(settings: [String: Any], logger: Logger) {
+                var allKeys = Set(settings.keys)
+                var incorrectKeys = Set<String>()
+                var missingKeys = Set<String>()
+            
+            \(raw: $0.filter { $0.isLet == false }.map {
             """
-                if let newValue = settings[\"\($0.identifier)\"] as? \($0.typeAnnotation!) {
+                if let newValue = settings["\($0.identifier)"] as? \($0.typeAnnotation!) {
                     \($0.identifier) = newValue
+                    allKeys.remove("\($0.identifier)")
                 } else {
                     \($0.identifier) = \($0.initializerValue ?? "nil")
+                    if allKeys.contains("\($0.identifier)") {
+                        allKeys.remove("\($0.identifier)")
+                        incorrectKeys.insert("\($0.identifier)")
+                    } else {
+                        missingKeys.insert("\($0.identifier)")
+                    }
                 }
+            
             """}.joined(separator: "\n"))
+                if !allKeys.isEmpty {
+                    logger.warning("The key(s) \\(allKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
+                }
+                
+                if !incorrectKeys.isEmpty {
+                    logger.error("The key(s) \\(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
+                }
+                
+                if !missingKeys.isEmpty {
+                    logger.warning("The key(s) \\(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                }
             }
             """
         }
@@ -193,6 +217,7 @@ private struct Property {
     var identifier: String
     var typeAnnotation: TypeSyntax?
     var initializerValue: ExprSyntax?
+    var isLet: Bool
 }
 
 extension ExprSyntax {
@@ -207,6 +232,14 @@ extension ExprSyntax {
             return "Swift.String"
         } else {
             return nil
+        }
+    }
+}
+
+extension SyntaxStringInterpolation {
+    mutating func appendInterpolation<Node: SyntaxProtocol>(_ node: Node?) {
+        if let node {
+            self.appendInterpolation(node)
         }
     }
 }

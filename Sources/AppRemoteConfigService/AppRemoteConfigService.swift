@@ -2,6 +2,7 @@ import AppRemoteConfig
 import Dependencies
 import DependenciesAdditions
 import Foundation
+import OSLog
 #if os(iOS) || os(tvOS)
 import UIKit
 #endif
@@ -15,7 +16,7 @@ public class AppRemoteConfigService {
     let minimumRefreshInterval: TimeInterval
     let automaticRefreshInterval: TimeInterval
     let bundledConfigURL: URL?
-    let apply: (_ settings: [String: Any]) -> ()
+    let apply: (_ settings: [String: Any], _ logger: Logger) -> ()
     
     let platform: Platform
     let platformVersion: OperatingSystemVersion
@@ -36,7 +37,7 @@ public class AppRemoteConfigService {
         minimumRefreshInterval: TimeInterval = 60,
         automaticRefreshInterval: TimeInterval = 300,
         bundledConfigURL: URL? = nil,
-        apply: @escaping (_ settings: [String: Any]) -> ()
+        apply: @escaping (_ settings: [String: Any], _ logger: Logger) -> ()
     ) {
         self.url = url
         self.minimumRefreshInterval = minimumRefreshInterval
@@ -198,7 +199,7 @@ public class AppRemoteConfigService {
         logger.debug("Resolving settings for date \(date, privacy: .public)")
         let settings = resolve(date: date)
         logger.debug("Applying settings \(settings)")
-        apply(settings)
+        apply(settings, logger)
         if let nextDate = nextResolutionDate(after: date) {
             logger.debug("Next resolve on date \(nextDate, privacy: .public)")
             mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {
