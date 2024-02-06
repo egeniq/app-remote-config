@@ -1,5 +1,5 @@
 {
-  "$id": "https://egeniq.com/appremoteconfig.schema.json",
+  "$id": "https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json",
   "title": "App Remote Config",
   "type": "object",
   "description": "A simple but effective way to manage apps remotely. A simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.",

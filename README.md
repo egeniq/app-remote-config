@@ -6,11 +6,15 @@ Create a simple configuration file that is easy to maintain and host, yet provid
 
 ## Schema
 
-The JSON/YAML schema is defined [here](./Schema/appremoteconfig.schema.json).
+The JSON/YAML schema is defined [here](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json).
 
 ## CLI Utility
 
 Use the `care` CLI utility to initialize, verify, resolve and prepare configuration files.
+
+To install use:
+
+    brew install egeniq/app-utilities/care
 
 ## Multiplatform
 
@@ -18,7 +22,7 @@ Use the `care` CLI utility to initialize, verify, resolve and prepare configurat
 
 Import the package in your `Package.swift` file:
 
-    .package(url: "https://github.com/egeniq/app-remote-config", branch: "develop"),
+    .package(url: "https://github.com/egeniq/app-remote-config", from: "0.0.2"),
 
 Then a good approach is to create your own `AppRemoteConfigClient`.
 
