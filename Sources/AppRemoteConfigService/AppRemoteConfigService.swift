@@ -9,6 +9,7 @@ import UIKit
 
 public enum AppRemoteConfigServiceError: Error {
     case unexpectedType
+    case keysMismatch(unhandled: Set<String>, incorrect: Set<String>, missing: Set<String>)
 }
 
 public class AppRemoteConfigService {
@@ -16,7 +17,7 @@ public class AppRemoteConfigService {
     let minimumRefreshInterval: TimeInterval
     let automaticRefreshInterval: TimeInterval
     let bundledConfigURL: URL?
-    let apply: (_ settings: [String: Any], _ logger: Logger) -> ()
+    let apply: (_ settings: [String: Any]) throws -> ()
     
     let platform: Platform
     let platformVersion: OperatingSystemVersion
@@ -37,7 +38,7 @@ public class AppRemoteConfigService {
         minimumRefreshInterval: TimeInterval = 60,
         automaticRefreshInterval: TimeInterval = 300,
         bundledConfigURL: URL? = nil,
-        apply: @escaping (_ settings: [String: Any], _ logger: Logger) -> ()
+        apply: @escaping (_ settings: [String: Any]) throws -> ()
     ) {
         self.url = url
         self.minimumRefreshInterval = minimumRefreshInterval
@@ -199,7 +200,26 @@ public class AppRemoteConfigService {
         logger.debug("Resolving settings for date \(date, privacy: .public)")
         let settings = resolve(date: date)
         logger.debug("Applying settings \(settings)")
-        apply(settings, logger)
+        do {
+            try apply(settings)
+        } catch  {
+            switch error {
+            case let AppRemoteConfigServiceError.keysMismatch(unhandledKeys, incorrectKeys, missingKeys):
+                if !unhandledKeys.isEmpty {
+                    logger.warning("The key(s) \(unhandledKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
+                }
+                
+                if !incorrectKeys.isEmpty {
+                    logger.error("The key(s) \(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
+                }
+                
+                if !missingKeys.isEmpty {
+                    logger.warning("The key(s) \(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                }
+            default:
+                logger.error("Error encounted applying setings: \(error)")
+            }
+        }
         if let nextDate = nextResolutionDate(after: date) {
             logger.debug("Next resolve on date \(nextDate, privacy: .public)")
             mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {

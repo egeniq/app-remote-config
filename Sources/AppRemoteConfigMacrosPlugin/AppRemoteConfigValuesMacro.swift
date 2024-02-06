@@ -138,7 +138,7 @@ public enum AppRemoteConfigValuesMacro: MemberMacro {
             \(raw: $0.map { "self.\($0.identifier) = \($0.identifier)" }.joined(separator: "\n"))
             }
             
-            func apply(settings: [String: Any], logger: Logger) {
+            func apply(settings: [String: Any]) throws {
                 var allKeys = Set(settings.keys)
                 var incorrectKeys = Set<String>()
                 var missingKeys = Set<String>()
@@ -159,16 +159,8 @@ public enum AppRemoteConfigValuesMacro: MemberMacro {
                 }
             
             """}.joined(separator: "\n"))
-                if !allKeys.isEmpty {
-                    logger.warning("The key(s) \\(allKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
-                }
-                
-                if !incorrectKeys.isEmpty {
-                    logger.error("The key(s) \\(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
-                }
-                
-                if !missingKeys.isEmpty {
-                    logger.warning("The key(s) \\(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                if !allKeys.isEmpty || !incorrectKeys.isEmpty || !missingKeys.isEmpty {
+                    throw AppRemoteConfigServiceError.keysMismatch(unhandled: allKeys, incorrect: incorrectKeys, missing: missingKeys)
                 }
             }
             """

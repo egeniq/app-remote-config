@@ -27,7 +27,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
             }
             """
         } expansion: {
-            #"""
+            """
             public class Values {
                 public private(set) var newFeature: Bool = false
                 public private(set) var otherFeature: Int = 42
@@ -52,7 +52,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                     self.prices = prices
                 }
 
-                func apply(settings: [String: Any], logger: Logger) {
+                func apply(settings: [String: Any]) throws {
                     var allKeys = Set(settings.keys)
                     var incorrectKeys = Set<String>()
                     var missingKeys = Set<String>()
@@ -135,20 +135,12 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                         }
                     }
 
-                    if !allKeys.isEmpty {
-                        logger.warning("The key(s) \(allKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
-                    }
-                    
-                    if !incorrectKeys.isEmpty {
-                        logger.error("The key(s) \(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
-                    }
-                    
-                    if !missingKeys.isEmpty {
-                        logger.warning("The key(s) \(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                    if !allKeys.isEmpty || !incorrectKeys.isEmpty || !missingKeys.isEmpty {
+                        throw AppRemoteConfigServiceError.keysMismatch(unhandled: allKeys, incorrect: incorrectKeys, missing: missingKeys)
                     }
                 }
             }
-            """#
+            """
         }
     }
     
@@ -162,7 +154,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
           }
           """
         } expansion: {
-            #"""
+            """
             public class Values {
                 public private(set) var newFeature: Bool = false
                 public private(set) let otherFeature: Int
@@ -175,7 +167,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                     self.otherFeature = otherFeature
                 }
 
-                func apply(settings: [String: Any], logger: Logger) {
+                func apply(settings: [String: Any]) throws {
                     var allKeys = Set(settings.keys)
                     var incorrectKeys = Set<String>()
                     var missingKeys = Set<String>()
@@ -193,20 +185,12 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                         }
                     }
 
-                    if !allKeys.isEmpty {
-                        logger.warning("The key(s) \(allKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
-                    }
-                    
-                    if !incorrectKeys.isEmpty {
-                        logger.error("The key(s) \(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
-                    }
-                    
-                    if !missingKeys.isEmpty {
-                        logger.warning("The key(s) \(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                    if !allKeys.isEmpty || !incorrectKeys.isEmpty || !missingKeys.isEmpty {
+                        throw AppRemoteConfigServiceError.keysMismatch(unhandled: allKeys, incorrect: incorrectKeys, missing: missingKeys)
                     }
                 }
             }
-            """#
+            """
         }
     }
     
@@ -223,7 +207,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
           }
           """
         } expansion: {
-            #"""
+            """
             public class Values {
                 public private(set) var newFeature: Bool = false
 
@@ -237,7 +221,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                     self.newFeature = newFeature
                 }
 
-                func apply(settings: [String: Any], logger: Logger) {
+                func apply(settings: [String: Any]) throws {
                     var allKeys = Set(settings.keys)
                     var incorrectKeys = Set<String>()
                     var missingKeys = Set<String>()
@@ -255,20 +239,12 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                         }
                     }
 
-                    if !allKeys.isEmpty {
-                        logger.warning("The key(s) \(allKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
-                    }
-                    
-                    if !incorrectKeys.isEmpty {
-                        logger.error("The key(s) \(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
-                    }
-                    
-                    if !missingKeys.isEmpty {
-                        logger.warning("The key(s) \(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                    if !allKeys.isEmpty || !incorrectKeys.isEmpty || !missingKeys.isEmpty {
+                        throw AppRemoteConfigServiceError.keysMismatch(unhandled: allKeys, incorrect: incorrectKeys, missing: missingKeys)
                     }
                 }
             }
-            """#
+            """
         }
     }
     
@@ -289,7 +265,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
           }
           """
         } expansion: {
-            #"""
+            """
             public class Values {
                 var newFeature: String = NewFeature.veryCool.rawValue
                 public var newFeatureEnum: NewFeature {
@@ -307,7 +283,7 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                     self.newFeature = newFeature
                 }
 
-                func apply(settings: [String: Any], logger: Logger) {
+                func apply(settings: [String: Any]) throws {
                     var allKeys = Set(settings.keys)
                     var incorrectKeys = Set<String>()
                     var missingKeys = Set<String>()
@@ -325,20 +301,12 @@ final class AppRemoteConfigValuesMacroTests: BaseTestCase {
                         }
                     }
 
-                    if !allKeys.isEmpty {
-                        logger.warning("The key(s) \(allKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
-                    }
-                    
-                    if !incorrectKeys.isEmpty {
-                        logger.error("The key(s) \(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
-                    }
-                    
-                    if !missingKeys.isEmpty {
-                        logger.warning("The key(s) \(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                    if !allKeys.isEmpty || !incorrectKeys.isEmpty || !missingKeys.isEmpty {
+                        throw AppRemoteConfigServiceError.keysMismatch(unhandled: allKeys, incorrect: incorrectKeys, missing: missingKeys)
                     }
                 }
             }
-            """#
+            """
         }
     }
 }
