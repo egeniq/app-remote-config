@@ -32,7 +32,7 @@
               "description": "To be considered a match, the condition should match all properties.",
               "properties": {
                 "platform": {
-                  "enum": ["iOS", "iOS.iPhone", "iOS.iPad", "iOS.TV", "iOS.CarPlay", "iOS.Mac", "macOS", "watchOS", "visionOS", "Android", "Android.phone", "Andriod.tablet", "Android.TV", "WearOS"],
+                  "enum": ["iOS", "iOS.iPhone", "iOS.iPad", "iOS.TV", "iOS.CarPlay", "iOS.Mac", "Linux", "macOS", "watchOS", "visionOS", "Android", "Android.phone", "Andriod.tablet", "Android.TV", "Windows", "WearOS"],
                   "description": "The platform the app is running on. "
                 },
                 "platformVersion": {

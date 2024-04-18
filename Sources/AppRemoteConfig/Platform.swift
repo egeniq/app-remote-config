@@ -7,6 +7,7 @@ public enum Platform: String, CaseIterable {
     case iOS_tv = "iOS.TV"
     case iOS_carplay = "iOS.CarPlay"
     case iOS_mac = "iOS.Mac"
+    case linux = "Linux"
     case macOS = "macOS"
     case watchOS = "watchOS"
     case visionOS = "visionOS"
@@ -15,6 +16,7 @@ public enum Platform: String, CaseIterable {
     case android_tablet = "Android.tablet"
     case android_tv = "Android.TV"
     case wearOS = "WearOS"
+    case windows = "Windows"
     case unknown
     
     func applies(to other: Platform) -> Bool {
