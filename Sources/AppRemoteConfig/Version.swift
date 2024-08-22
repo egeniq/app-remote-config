@@ -52,3 +52,9 @@ public struct Version: Equatable, Comparable {
     }
 }
 
+
+public struct OperatingSystemVersion {
+    let majorVersion: Int
+    let minorVersion: Int
+    let patchVersion: Int
+}

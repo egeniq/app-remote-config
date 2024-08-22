@@ -38,7 +38,7 @@ final class AppRemoteConfigTests: XCTestCase {
                  {
                      "matching": [
                          {
-                             "platform": "ios",
+                             "platform": "iOS",
                              "appVersionCode": 123,
                              "versionName": "String",
                              "appVersion": "2.0.0"
@@ -54,11 +54,11 @@ final class AppRemoteConfigTests: XCTestCase {
                  {
                      "matching": [
                          {
-                             "platform": "ios",
+                             "platform": "iOS",
                              "appVersion": "<3.0.0"
                          },
                          {
-                             "platform": "android",
+                             "platform": "Android",
                              "appVersionCode": "<123"
                          }
                      ],
@@ -347,5 +347,305 @@ final class AppRemoteConfigTests: XCTestCase {
             XCTAssertFalse(versionRange.contains(try! Version("2.0.0")))
             XCTAssertFalse(versionRange.contains(try! Version("2.0.1")))
         }
+    }
+    
+    func testNotMatchingWhenUnknownKeysArePresent() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "appVersion": "1.0.0",
+                            "unknownKey": "present"
+                        }
+                    ],
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        
+        let foo = settings["foo"] as! Int
+        XCTAssertEqual(foo, 1)
+    }
+    
+    func testRelevantDates() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "appVersion": "1.0.0"
+                        }
+                    ],
+                    "schedule": {
+                        "from": "2024-08-21T00:00:00Z",
+                        "until": "2024-09-11T00:00:00Z"
+                    },
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let config = try Config(json: json)
+        let dates = try config.relevantResolutionDates(platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+       
+        XCTAssertEqual(dates, [
+            ISO8601DateFormatter().date(from: "2024-08-21T00:00:00Z")!,
+            ISO8601DateFormatter().date(from: "2024-09-11T00:00:00Z")!
+        ])
+    }
+
+     func testRelevantDatesWithOtherZones() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "appVersion": "1.0.0"
+                        }
+                    ],
+                    "schedule": {
+                        "from": "2024-08-21T00:00:00+0100",
+                        "until": "2024-09-11T00:00:00-09:00"
+                    },
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let config = try Config(json: json)
+        let dates = try config.relevantResolutionDates(platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+       
+        XCTAssertEqual(dates, [
+            ISO8601DateFormatter().date(from: "2024-08-20T23:00:00Z")!,
+            ISO8601DateFormatter().date(from: "2024-09-11T09:00:00Z")!
+        ])
+    }
+    
+    func testOverridingWithABuildVariant() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "buildVariant": "debug"
+                        }
+                    ],
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        do {
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .debug)
+            
+            let foo = settings["foo"] as! Int
+            XCTAssertEqual(foo, 2)
+        }
+        do {
+            let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+            
+            let foo = settings["foo"] as! Int
+            XCTAssertEqual(foo, 1)
+        }
+    }
+    
+    func testOverridingWithAnUnsupportedBuildVariant() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "buildVariant": "unsupported variant"
+                        }
+                    ],
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        
+        let foo = settings["foo"] as! Int
+        XCTAssertEqual(foo, 1)
+    }
+
+    func testOverridingWithInvalidKeys() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "buildVariant": "unsupported variant",
+                            "platform": true
+                        }
+                    ],
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        
+        let foo = settings["foo"] as! Int
+        XCTAssertEqual(foo, 1)
+    }
+
+    func testOverridingWithUnknownPlatform() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "platform": "unsupported platform"
+                        }
+                    ],
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        
+        let foo = settings["foo"] as! Int
+        XCTAssertEqual(foo, 1)
+    }
+
+    func testOverridingWithUnsupportedKey() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "unsupported key": "unsupported value"
+                        }
+                    ],
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        
+        let foo = settings["foo"] as! Int
+        XCTAssertEqual(foo, 1)
+    }
+
+
+    func testOverridingWithUnsupportedAppVersion() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": 1
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "appVersion": "unsupported value"
+                        }
+                    ],
+                    "settings": {
+                        "foo": 2
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        
+        let foo = settings["foo"] as! Int
+        XCTAssertEqual(foo, 1)
     }
 }
