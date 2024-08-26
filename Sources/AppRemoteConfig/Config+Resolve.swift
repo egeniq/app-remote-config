@@ -2,6 +2,16 @@ import Foundation
 
 extension Config {
     
+    /// Resolves which settings should be used by an app within its context
+    /// - Parameters:
+    ///   - date: The date at which the settings are used
+    ///   - platform: The platform on which the app runs
+    ///   - platformVersion: The version of the platform on which the app runs
+    ///   - appVersion: The version of the app that runs
+    ///   - variant: The variant of the app that runs
+    ///   - buildVariant: The build variant of the app that runs
+    ///   - language: The language in which the app runs
+    /// - Returns: Resolved settings
     public func resolve(date: Date, platform: Platform, platformVersion: OperatingSystemVersion, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [String: Any] {
         overrides.reduce(into: settings) { partialResult, override in
             let isScheduled: Bool
@@ -33,6 +43,15 @@ extension Config {
         }
     }
     
+    /// Lists all dates on which resolving the config could give other setings
+    /// - Parameters:
+    ///   - platform: The platform on which the app runs
+    ///   - platformVersion: The version of the platform on which the app runs
+    ///   - appVersion: The version of the app that runs
+    ///   - variant: The variant of the app that runs
+    ///   - buildVariant: The build variant of the app that runs
+    ///   - language: The language in which the app runs
+    /// - Returns: List of relevant dates
     public func relevantResolutionDates(platform: Platform, platformVersion: OperatingSystemVersion, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [Date] {
         overrides.reduce(into: [Date](), { partialResult, override in
             guard let schedule = override.schedule else {

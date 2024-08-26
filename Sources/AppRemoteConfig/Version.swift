@@ -1,5 +1,6 @@
 import Foundation
 
+/// Version following semantic versioning convention
 public struct Version: Equatable, Comparable {
     public static func < (lhs: Version, rhs: Version) -> Bool {
         if lhs.canonical.0 == rhs.canonical.0 && lhs.canonical.1 == rhs.canonical.1 {
@@ -50,11 +51,4 @@ public struct Version: Equatable, Comparable {
     public var operatingSystemVersion: OperatingSystemVersion {
         .init(majorVersion: canonical.0, minorVersion: canonical.1, patchVersion: canonical.2)
     }
-}
-
-
-public struct OperatingSystemVersion {
-    let majorVersion: Int
-    let minorVersion: Int
-    let patchVersion: Int
 }

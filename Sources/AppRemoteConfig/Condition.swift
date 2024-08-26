@@ -1,19 +1,26 @@
 import Foundation
 
-public enum BuildVariant: String, CaseIterable {
-    case release
-    case debug
-    case unknown
-}
-
-struct Condition {
+/// To be considered a match, the condition should match all properties
+public struct Condition {
     let matchNever: Bool
-    let platform: Platform?
-    let platformVersion: VersionRange?
-    let appVersion: VersionRange?
-    let variant: String?
-    let buildVariant: BuildVariant?
-    let language: String?
+    
+    /// The platform the app is running on.
+    public let platform: Platform?
+    
+    /// The semantic version of platform the app is running on.
+    public let platformVersion: VersionRange?
+    
+    /// The semantic version of the app.
+    public let appVersion: VersionRange?
+    
+    /// The variant of the app.
+    public let variant: String?
+    
+    /// The build variant of the app.
+    public let buildVariant: BuildVariant?
+    
+    /// The language the app is using currently as two character code.
+    public let language: String?
     
     init(json: [String: Any]) {
         // If there is a new unknown key, never match condition

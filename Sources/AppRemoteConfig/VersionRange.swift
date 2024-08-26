@@ -1,9 +1,35 @@
 import Foundation
 
+/// Range of versions
 public enum VersionRange {
+    
+    /// Matches an exact version
+    /// 
+    /// Example string representation: \
+    /// `1.0.0`
     case equal(Version)
+    
+    /// Matches an version lesser than the given version, if the boolean is `true` the version is included
+    ///
+    /// Example string representations: \
+    /// `<1.0.0` '
+    /// `<=1.0.0`
     case lesserThan((Version, Bool))
+    
+    /// Matches an version greater than the given version, if the boolean is `true` the version is included
+    ///
+    /// Example string representations: \
+    /// `>1.0.0` \
+    /// `>=1.0.0`
     case greaterThan((Version, Bool))
+    
+    /// Matches an version between than two given versions, if the boolean is `true` the version is included
+    ///
+    /// Example string representations: \
+    /// `1.0.0-2.0.0` (versions 1.0.0 and 2.0.0 are included) \
+    /// `1.0.0>-2.0.0`(version 1.0.0 excluded and version 2.0.0 included) \
+    /// `1.0.0-<2.0.0`(version 1.0.0 included and version 2.0.0 excluded) \
+    /// `1.0.0>-<2.0.0` (versions 1.0.0 and 2.0.0 are excluded)
     case between((Version, Bool), and: (Version, Bool))
     
     func contains(_ other: Version) -> Bool {

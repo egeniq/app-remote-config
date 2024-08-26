@@ -26,14 +26,14 @@
         "properties": {
           "matching": {
             "type": "array",
-            "description": "To be considered an override should match at least one of conditions.",
+            "description": "To be considered an override should match at least one of the conditions.",
             "items": {
               "type":"object",
               "description": "To be considered a match, the condition should match all properties.",
               "properties": {
                 "platform": {
                   "enum": ["iOS", "iOS.iPhone", "iOS.iPad", "iOS.TV", "iOS.CarPlay", "iOS.Mac", "Linux", "macOS", "watchOS", "visionOS", "Android", "Android.phone", "Andriod.tablet", "Android.TV", "Windows", "WearOS"],
-                  "description": "The platform the app is running on. "
+                  "description": "The platform the app is running on."
                 },
                 "platformVersion": {
                   "type": "string",
