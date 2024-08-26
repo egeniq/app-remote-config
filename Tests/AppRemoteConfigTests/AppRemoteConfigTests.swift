@@ -417,7 +417,7 @@ final class AppRemoteConfigTests: XCTestCase {
         ])
     }
 
-     func testRelevantDatesWithOtherZones() async throws {
+    func testRelevantDatesWithOtherZones() async throws {
         let jsonString = """
         {
             "settings": {

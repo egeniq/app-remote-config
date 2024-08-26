@@ -5,7 +5,7 @@ struct Schedule {
     var from: Date?
     var until: Date?
     
-    static var dateFormatter = ISO8601DateFormatter()
+    static let dateFormatter = ISO8601DateFormatter()
     
     init(json: [String: Any]) {
         if let fromJSON = json["from"] {
