@@ -38,7 +38,7 @@ public enum Platform: String, CaseIterable {
     /// Android on a phone
     case android_phone = "Android.phone"
     
-    /// Android on a table
+    /// Android on a tablet
     case android_tablet = "Android.tablet"
     
     /// Android on a tv
