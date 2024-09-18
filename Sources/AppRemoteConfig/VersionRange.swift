@@ -1,7 +1,7 @@
 import Foundation
 
 /// Range of versions
-public enum VersionRange {
+public enum VersionRange: Sendable {
     
     /// Matches an exact version
     /// 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// To be considered a match, the condition should match all properties
-public struct Condition {
+public struct Condition: Sendable {
     let matchNever: Bool
     
     /// The platform the app is running on.

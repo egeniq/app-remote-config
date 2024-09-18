@@ -2,7 +2,7 @@ import XCTest
 import Foundation
 @testable import AppRemoteConfig
 
-@available(macOS 13, *)
+@available(macOS 13, *) @MainActor
 final class AppRemoteConfigTests: XCTestCase {
     
     func testParsing() async throws {

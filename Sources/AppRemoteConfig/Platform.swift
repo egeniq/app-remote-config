@@ -1,7 +1,7 @@
 import Foundation
 
 /// Lists supported platforms
-public enum Platform: String, CaseIterable {
+public enum Platform: String, CaseIterable, Sendable {
     /// iOS in any of its variants
     case iOS = "iOS"
     

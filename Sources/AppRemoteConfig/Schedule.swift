@@ -3,7 +3,7 @@ import Foundation
 /// A schedule describes a period of time.
 ///
 /// Omitting `from` means distant past and omitting `until` means distant future. Omitting both means the schedule will never be matched.
-public struct Schedule {
+public struct Schedule: Sendable {
     let matchNever: Bool
     
     /// Date-time from which onwards the settings should be applied.
@@ -12,7 +12,7 @@ public struct Schedule {
     /// Date-time from which onwards the settings should not be applied anymore.
     public let until: Date?
     
-    static let dateFormatter = ISO8601DateFormatter()
+    nonisolated(unsafe) static let dateFormatter = ISO8601DateFormatter()
     
     init(json: [String: Any]) {
         if let fromJSON = json["from"] {

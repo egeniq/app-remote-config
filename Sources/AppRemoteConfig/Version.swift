@@ -1,7 +1,7 @@
 import Foundation
 
 /// Version following semantic versioning convention
-public struct Version: Equatable, Comparable {
+public struct Version: Equatable, Comparable, Sendable {
     public static func < (lhs: Version, rhs: Version) -> Bool {
         if lhs.canonical.0 == rhs.canonical.0 && lhs.canonical.1 == rhs.canonical.1 {
             lhs.canonical.2 < rhs.canonical.2

@@ -1,7 +1,8 @@
 import Foundation
 
 /// A simple but effective way to manage apps remotely. A simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.
-public struct Config {
+@MainActor
+public struct Config: Sendable {
     /// The default settings that an app should use.
     public let settings: [String: Any]
     
