@@ -1,4 +1,6 @@
+import Dependencies
 import Foundation
+import SodiumClient
 
 /// A simple but effective way to manage apps remotely. A simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.
 @MainActor
@@ -16,7 +18,7 @@ public struct Config: Sendable {
     public let meta: [String: Any]
     
     /// Create a config from a JSON like structure
-    /// - Parameter json: JSON descibing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
+    /// - Parameter json: JSON describing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
     public init(json: [String: Any]) throws {
         if let jsonValue = json["settings"] {
             guard let dictionary = jsonValue as? [String: Any] else {
@@ -29,5 +31,29 @@ public struct Config: Sendable {
         deprecatedKeys = json["deprecatedKeys"] as? [String] ?? []
         overrides = (json["overrides"] as? [[String: Any]])?.map(Override.init(json:)) ?? []
         meta = json["meta"] as? [String: Any] ?? [:]
+    }
+    
+    /// Create a config from JSON
+    /// - Parameter data: Data containing JSON describing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
+    public init(data: Data) throws {
+        guard let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+            throw ConfigError.unexpectedTypeForKey("root")
+        }
+        try self.init(json: json)
+    }
+  
+    /// Create a config from signed JSON
+    /// - Parameters:
+    ///   - data: Data containing signed JSON describing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
+    ///   - publicKey: Base64 encoded public key that was used to sign the data.
+    public init(data: Data, publicKey: String) throws {
+        @Dependency(SodiumClient.self) var sodiumClient
+        guard let config = sodiumClient.open(signedMessage: data, publicKey: publicKey) else {
+            throw ConfigError.invalidSignature
+        }
+        guard let json = try JSONSerialization.jsonObject(with: config, options: []) as? [String: Any] else {
+            throw ConfigError.unexpectedTypeForKey("root")
+        }
+        try self.init(json: json)
     }
 }
