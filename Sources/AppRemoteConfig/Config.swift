@@ -1,6 +1,4 @@
-import Dependencies
 import Foundation
-import SodiumClient
 
 /// A simple but effective way to manage apps remotely. A simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.
 public struct Config: Sendable {
@@ -40,21 +38,4 @@ public struct Config: Sendable {
         }
         try self.init(json: json)
     }
-  
-#if canImport(Sodium)
-    /// Create a config from signed JSON
-    /// - Parameters:
-    ///   - data: Data containing signed JSON describing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
-    ///   - publicKey: Base64 encoded public key that was used to sign the data.
-    public init(data: Data, publicKey: String) throws {
-        @Dependency(SodiumClient.self) var sodiumClient
-        guard let config = sodiumClient.open(signedMessage: data, publicKey: publicKey) else {
-            throw ConfigError.invalidSignature
-        }
-        guard let json = try JSONSerialization.jsonObject(with: config, options: []) as? [String: Sendable] else {
-            throw ConfigError.unexpectedTypeForKey("root")
-        }
-        try self.init(json: json)
-    }
-#endif
 }
