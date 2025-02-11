@@ -22,12 +22,10 @@ To install use:
 
 Source for CLI can be found [here](https://github.com/egeniq/app-remote-config-care).
 
-## Multiplatform
+## Apple
 
-### Apple
+Further support providing an `AppRemoteConfigClient` for Apple platforms (macOS, iOS, tvOS, watchOS, visionOS) can be found [here](https://github.com/egeniq/app-remote-config-ios).
 
-Support for Apple platforms (macOS, iOS, tvOS, watchOS, visionOS) can be found [here](https://github.com/egeniq/app-remote-config-ios).
+## Android
 
-### Android
-
-Support for Android can be found [here](https://github.com/egeniq/app-remote-config-android).
+This package compiles on Android, but there is also a port to Kotlin available [here](https://github.com/egeniq/app-remote-config-android).

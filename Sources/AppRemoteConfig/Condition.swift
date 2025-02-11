@@ -22,7 +22,7 @@ public struct Condition: Sendable {
     /// The language the app is using currently as two character code.
     public let language: String?
     
-    init(json: [String: Any]) {
+    init(json: [String: Sendable]) {
         // If there is a new unknown key, never match condition
         guard !json.keys.contains(where: { !["platform", "platformVersion", "appVersion", "variant", "buildVariant", "language"].contains($0) }) else {
             matchNever = true

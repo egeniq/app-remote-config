@@ -1,3 +1,4 @@
+#if canImport(Sodium)
 import Dependencies
 import Foundation
 import Sodium
@@ -28,3 +29,4 @@ extension SodiumClient: DependencyKey {
         }
     )
 }
+#endif

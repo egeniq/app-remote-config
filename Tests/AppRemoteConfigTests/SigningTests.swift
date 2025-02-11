@@ -1,10 +1,10 @@
+#if canImport(Sodium)
 @testable import AppRemoteConfig
 import Dependencies
 import Foundation
 import SodiumClientLive
 import XCTest
 
-@available(macOS 13, *) @MainActor
 final class SigningTests: XCTestCase {
     
     // $> care create-key-pair
@@ -71,3 +71,4 @@ final class SigningTests: XCTestCase {
         }
     }
 }
+#endif

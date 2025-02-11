@@ -14,7 +14,7 @@ public struct Schedule: Sendable {
     
     nonisolated(unsafe) static let dateFormatter = ISO8601DateFormatter()
     
-    init(json: [String: Any]) {
+    init(json: [String: Sendable]) {
         if let fromJSON = json["from"] {
             if let fromString = fromJSON as? String, let date = Self.dateFormatter.date(from: fromString) {
                 from = date
