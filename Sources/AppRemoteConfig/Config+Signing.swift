@@ -2,7 +2,13 @@ import Crypto
 import Foundation
 
 extension Config {
-   
+    
+    /// Key under which the signed base64 encoded data is stored
+    public static let dataKey: String = "d"
+    
+    /// Key under which the  base64 encoded signature is stored
+    public static let signatureKey: String = "sig"
+    
     /// Create a config from signed JSON
     /// - Parameters:
     ///   - data: Data containing signed JSON describing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
@@ -12,9 +18,9 @@ extension Config {
             throw ConfigError.unexpectedTypeForKey("root")
         }
         guard 
-            let encodedConfigData: String = json["data"] as? String, 
-            let configData = Data(base64Encoded: encodedConfigData), 
-            let encodedSignature = json["signature"] as? String,
+            let encodedConfigData: String = json[Self.dataKey] as? String,
+            let configData = Data(base64Encoded: encodedConfigData),
+            let encodedSignature = json[Self.signatureKey] as? String,
             let signature = Data(base64Encoded: encodedSignature) else {
             throw ConfigError.base64DecodingFailed
         }
@@ -24,30 +30,6 @@ extension Config {
         }
 
         try self.init(data: configData)
-    }
-
-    /// Signs the configuration data using the provided private key.
-    /// 
-    /// This method serializes the configuration data into JSON format, signs it using the provided Curve25519 private key, 
-    /// and then returns the signed data along with the signature in a JSON format.
-    ///
-    /// - Parameter privateKey: The Curve25519 private key used to sign the data.
-    /// - Throws: An error if the data serialization or signing process fails.
-    /// - Returns: A `Data` object containing the signed configuration data and the signature in JSON format.
-    public func signedData(privateKey: Curve25519.Signing.PrivateKey) throws -> Data {
-        let data = try JSONSerialization.data(withJSONObject: [
-            "settings": settings,
-            "deprecatedKeys": deprecatedKeys,
-            "overrides": overrides,
-            "meta": meta
-        ])
-        
-        let signature = try privateKey.signature(for: data)
-
-        return try JSONSerialization.data(withJSONObject: [
-            "data": data.base64EncodedString(),
-            "signature": signature.base64EncodedString() 
-        ])
     }
 }
 

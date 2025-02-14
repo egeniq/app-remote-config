@@ -10,8 +10,15 @@ final class SigningTests: XCTestCase {
         let configData = """
             {"settings": {"testing": true}}
             """.data(using: .utf8)!
-        let config = try Config(data: configData)
-        let signedData = try config.signedData(privateKey: privateKey)
+        let signature = try privateKey.signature(for: configData)
+        let signedData = try JSONSerialization.data(
+            withJSONObject: [
+                Config.dataKey: configData.base64EncodedString(),
+                Config.signatureKey: signature.base64EncodedString()
+            ],
+            options: [.sortedKeys]
+        )
+        
         let signedConfig = try Config(data: signedData, publicKey: privateKey.publicKey)
 
         XCTAssertTrue(signedConfig.settings["testing"]! as! Bool)
@@ -22,8 +29,14 @@ final class SigningTests: XCTestCase {
         let configData = """
             {"settings": {"testing": true}}
             """.data(using: .utf8)!
-        let config = try Config(data: configData)
-        let signedData = try config.signedData(privateKey: privateKey)
+        let signature = try privateKey.signature(for: configData)
+        let signedData = try JSONSerialization.data(
+            withJSONObject: [
+                Config.dataKey: configData.base64EncodedString(),
+                Config.signatureKey: signature.base64EncodedString()
+            ],
+            options: [.sortedKeys]
+        )
         let otherPrivateKey = Curve25519.Signing.PrivateKey()
 
         XCTAssertThrowsError(try Config(data: signedData, publicKey: otherPrivateKey.publicKey)) {
