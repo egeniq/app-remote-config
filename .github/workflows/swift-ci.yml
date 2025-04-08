@@ -24,6 +24,9 @@ jobs:
         run: swift test
       - name: "Test Swift Package on Android"
         uses: skiptools/swift-android-action@v2
+        env:
+          EXCLUDE_SERVICE: 1
+          EXCLUDE_MACROS: 1
   windows:
     runs-on: windows-latest
     steps:
@@ -35,3 +38,6 @@ jobs:
           tag: 6.0.3-RELEASE
       - name: "Test Swift Package on Windows"
         run: swift test
+        env:
+          EXCLUDE_SERVICE: 1
+          EXCLUDE_MACROS: 1

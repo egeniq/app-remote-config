@@ -99,3 +99,22 @@ let package = Package(
         )
     ]
 )
+
+// MARK: - Parse build arguments
+
+func hasEnvironmentVariable(_ name: String) -> Bool {
+  return ProcessInfo.processInfo.environment[name] != nil
+}
+
+var excludeService: Bool { hasEnvironmentVariable("EXCLUDE_SERVICE") }
+var excludeMacros: Bool { hasEnvironmentVariable("EXCLUDE_MACROS") }
+
+if excludeService {
+    package.targets.removeAll(where: { $0.name.contains("Service") })
+    package.products.removeAll(where: { $0.name.contains("Service") })
+}
+
+if excludeMacros {
+    package.targets.removeAll(where: { $0.name.contains("Macros") })
+    package.products.removeAll(where: { $0.name.contains("Macros") })
+}
