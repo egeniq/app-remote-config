@@ -60,7 +60,6 @@ let package = Package(
             dependencies: [
                 "AppRemoteConfig",
                 .product(name: "Dependencies", package: "swift-dependencies"),
-                .product(name: "DependenciesAdditions", package: "swift-dependencies-additions")
             ]
         ),
         .testTarget(
