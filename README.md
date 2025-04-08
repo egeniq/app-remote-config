@@ -25,7 +25,6 @@ Then a good approach is to create your own `AppRemoteConfigClient`.
             .product(name: "AppRemoteConfigService", package: "app-remote-config"),
             .product(name: "AppRemoteConfigServiceMacros", package: "app-remote-config"),
             .product(name: "Dependencies", package: "swift-dependencies"),
-            .product(name: "DependenciesAdditions", package: "swift-dependencies-additions"),
             .product(name: "DependenciesMacros", package: "swift-dependencies"),
             .product(name: "Perception", package: "swift-perception")
         ]

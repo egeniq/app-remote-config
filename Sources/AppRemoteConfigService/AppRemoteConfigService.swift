@@ -1,10 +1,9 @@
 import AppRemoteConfig
 import Crypto
 import Dependencies
-import DependenciesAdditions
 import Foundation
-import OSLog
-#if os(iOS) || os(tvOS)
+import Logging
+#if canImport(UIKit)
 import UIKit
 #endif
 
@@ -29,6 +28,8 @@ public final class AppRemoteConfigService: Sendable {
     let appVersion: Version
     let buildVariant: BuildVariant
     let language: String?
+    
+    let logger = Logger(label: "app-remote-config.Service")
     
     @MainActor
     private(set) var lastSuccessfullFetch: Date?
@@ -112,8 +113,6 @@ public final class AppRemoteConfigService: Sendable {
             language = Locale.current.languageCode
         }
         
-        @Dependency(\.logger["AppRemoteConfigService"]) var logger
-        
         if let bundledConfigURL {
             logger.debug("Reading bundled fallback")
             // This is force unwrapped because the included fallback config must parse without issue
@@ -191,7 +190,6 @@ public final class AppRemoteConfigService: Sendable {
     @MainActor
     public func update(enteringForeground: Bool = false) async throws {
         @Dependency(\.date.now) var now
-        @Dependency(\.logger["AppRemoteConfigService"]) var logger
         if let lastSuccessfullFetch {
             guard abs(lastSuccessfullFetch.timeIntervalSinceNow) > minimumRefreshInterval else {
                 logger.debug("Skipping updating from remote: minimum refresh interval not met")
@@ -223,7 +221,7 @@ public final class AppRemoteConfigService: Sendable {
             assertionFailure("Failed to cache config data")
         }
         let nextDate = now.addingTimeInterval(automaticRefreshInterval)
-        logger.debug("Next update on date \(nextDate, privacy: .public)")
+        logger.debug("Next update on date \(nextDate)")
         @Dependency(\.mainQueue) var mainQueue
         mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {
             Task {
@@ -254,8 +252,7 @@ public final class AppRemoteConfigService: Sendable {
     
     @MainActor
     private func resolveAndApply(date: Date) {
-        @Dependency(\.logger["AppRemoteConfigService"]) var logger
-        logger.debug("Resolving settings for date \(date, privacy: .public)")
+        logger.debug("Resolving settings for date \(date)")
         let settings = resolve(date: date)
         logger.debug("Applying settings \(settings)")
         do {
@@ -264,22 +261,22 @@ public final class AppRemoteConfigService: Sendable {
             switch error {
             case let AppRemoteConfigServiceError.keysMismatch(unhandledKeys, incorrectKeys, missingKeys):
                 if !unhandledKeys.isEmpty {
-                    logger.warning("The key(s) \(unhandledKeys.joined(separator: ", "), privacy: .public) were provided but ignored.")
+                    logger.warning("The key(s) \(unhandledKeys.joined(separator: ", ")) were provided but ignored.")
                 }
                 
                 if !incorrectKeys.isEmpty {
-                    logger.error("The key(s) \(incorrectKeys.joined(separator: ", "), privacy: .public) were provided but had unexpected value types.")
+                    logger.error("The key(s) \(incorrectKeys.joined(separator: ", ")) were provided but had unexpected value types.")
                 }
                 
                 if !missingKeys.isEmpty {
-                    logger.warning("The key(s) \(missingKeys.joined(separator: ", "), privacy: .public) were not provided but expected.")
+                    logger.warning("The key(s) \(missingKeys.joined(separator: ", ")) were not provided but expected.")
                 }
             default:
                 logger.error("Error encounted applying setings: \(error)")
             }
         }
         if let nextDate = nextResolutionDate(after: date) {
-            logger.debug("Next resolve on date \(nextDate, privacy: .public)")
+            logger.debug("Next resolve on date \(nextDate)")
             @Dependency(\.mainQueue) var mainQueue
             mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {
                 self.resolveAndApply(date: nextDate)
@@ -288,5 +285,4 @@ public final class AppRemoteConfigService: Sendable {
             logger.debug("No next resolve needed")
         }
     }
-
 }
