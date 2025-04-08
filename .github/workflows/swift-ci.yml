@@ -20,17 +20,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Exclude Service and Macros
+        run: |
+          echo "EXCLUDE_SERVICE=1" >> "$GITHUB_ENV"
+          echo "EXCLUDE_MACROS=1" >> "$GITHUB_ENV"
       - name: "Test Swift Package on Linux"
         run: swift test
       - name: "Test Swift Package on Android"
         uses: skiptools/swift-android-action@v2
-        env:
-          EXCLUDE_SERVICE: 1
-          EXCLUDE_MACROS: 1
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Exclude Service and Macros
+        run: |
+          echo "EXCLUDE_SERVICE=1" >> "$GITHUB_ENV"
+          echo "EXCLUDE_MACROS=1" >> "$GITHUB_ENV"
       - name: "Setup Swift on Windows"
         uses: compnerd/gha-setup-swift@main
         with:
