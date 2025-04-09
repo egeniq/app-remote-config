@@ -28,21 +28,23 @@ jobs:
         run: swift test
       - name: "Test Swift Package on Android"
         uses: skiptools/swift-android-action@v2
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Exclude Service and Macros
-        run: |
-          echo "EXCLUDE_SERVICE=1" >> "$GITHUB_ENV"
-          echo "EXCLUDE_MACROS=1" >> "$GITHUB_ENV"
-      - name: "Setup Swift on Windows"
-        uses: compnerd/gha-setup-swift@main
-        with:
-          branch: swift-6.0.3-release
-          tag: 6.0.3-RELEASE
-      - name: "Test Swift Package on Windows"
-        run: swift test
-        env:
-          EXCLUDE_SERVICE: 1
-          EXCLUDE_MACROS: 1
+
+  # Disabled because the runner image has now an unsupported version of the Windows SDK
+  # windows:
+  #   runs-on: windows-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Exclude Service and Macros
+  #       run: |
+  #         echo "EXCLUDE_SERVICE=1" >> "$GITHUB_ENV"
+  #         echo "EXCLUDE_MACROS=1" >> "$GITHUB_ENV"
+  #     - name: "Setup Swift on Windows"
+  #       uses: compnerd/gha-setup-swift@main
+  #       with:
+  #         branch: swift-6.0.3-release
+  #         tag: 6.0.3-RELEASE
+  #     - name: "Test Swift Package on Windows"
+  #       run: swift test
+  #       env:
+  #         EXCLUDE_SERVICE: 1
+  #         EXCLUDE_MACROS: 1
