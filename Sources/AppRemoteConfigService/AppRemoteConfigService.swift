@@ -6,23 +6,57 @@ import Logging
 #if canImport(UIKit)
 import UIKit
 #endif
+import Sharing
 
-public enum AppRemoteConfigServiceError: Error {
+enum AppRemoteConfigServiceError: Error {
     case unexpectedType
     case invalidPublicKey
     case keysMismatch(unhandled: Set<String>, incorrect: Set<String>, missing: Set<String>)
 }
 
+@MainActor
+protocol ValuesContainer: Sendable {
+    func apply(settings: [String: Any]) throws
+}
+
 /// A service to fetch a remote config from a URL periodically and when the app returns to the foreground.
-public final class AppRemoteConfigService: Sendable {
+final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
+    func load<Value>(context _: Sharing.LoadContext<Value>, continuation: Sharing.LoadContinuation<Value>) {
+        fatalError()
+    }
+    
+    func save<Value>(_ value: Value, context: Sharing.SaveContext, continuation: Sharing.SaveContinuation) {
+        fatalError()
+    }
+    
+    func subscribe<Value>(context _: Sharing.LoadContext<Value>, subscriber: Sharing.SharedSubscriber<Value>) -> Sharing.SharedSubscription {
+        fatalError()
+    }
+    
+     
+//     func fetch<T: Decodable>(
+//         key: String,
+//         completion: @escaping (Result<T, any Error>) -> Void
+//     ) {
+//         fatalError()
+//     }
+//     func addUpdateListener<T: Decodable>(
+//         key: String,
+//         subscriber: @escaping (Result<T, any Error>) -> Void
+//     ) -> AnyCancellable {
+//         fatalError()
+//     }
+//     
+     
     let url: URL
     let publicKey: String?
     let minimumRefreshInterval: TimeInterval
     let automaticRefreshInterval: TimeInterval
     let bundledConfigURL: URL?
     let bundleIdentifier: String
-    let apply: @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
-    
+//    let apply: @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
+     let values: ValuesContainer
+     
     let platform: Platform
     let platformVersion: OperatingSystemVersion
     let appVersion: Version
@@ -54,7 +88,8 @@ public final class AppRemoteConfigService: Sendable {
         automaticRefreshInterval: TimeInterval = 300,
         bundledConfigURL: URL? = nil,
         bundleIdentifier: String,
-        apply: @escaping @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
+        values: ValuesContainer
+//        apply: @escaping @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
     ) {
         self.url = url
         self.publicKey = publicKey
@@ -62,7 +97,8 @@ public final class AppRemoteConfigService: Sendable {
         self.automaticRefreshInterval = automaticRefreshInterval
         self.bundledConfigURL = bundledConfigURL
         self.bundleIdentifier = bundleIdentifier
-        self.apply = apply
+        self.values = values
+//        self.apply = apply
         
 #if os(iOS) || os(tvOS)
         switch UIDevice.current.userInterfaceIdiom {
@@ -256,7 +292,7 @@ public final class AppRemoteConfigService: Sendable {
         let settings = resolve(date: date)
         logger.debug("Applying settings \(settings)")
         do {
-            try apply(settings)
+            try values.apply(settings: settings)
         } catch  {
             switch error {
             case let AppRemoteConfigServiceError.keysMismatch(unhandledKeys, incorrectKeys, missingKeys):
