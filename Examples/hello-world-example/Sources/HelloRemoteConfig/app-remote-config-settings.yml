@@ -1,0 +1,22 @@
+url: https://www.example.com/app-remote-config.json
+publicKey: "sdfknsdlkfbsdl"
+minimumRefreshInterval: 30
+automaticRefreshInterval: 600
+
+mapping:
+    appState:
+        type: RawRepresentable
+        name: AppState
+    grid:
+        type: Codable
+        name: GridDefinition
+    refreshInterval:
+        type: TypeAlias
+        name: TimeInterval
+    locationPush:
+        type: FeatureFlag
+        name: LocationPushEnabled
+        
+imports:
+- Models
+- KNMIAPIClient

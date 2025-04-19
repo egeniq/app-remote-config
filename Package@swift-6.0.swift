@@ -19,13 +19,13 @@ let package = Package(
             targets: ["AppRemoteConfig"]
         ),
         .library(
-            name: "AppRemoteConfigService",
-            targets: ["AppRemoteConfigService"]
+            name: "AppRemoteConfigClient",
+            targets: ["AppRemoteConfigClient"]
         ),
-        .library(
-            name: "AppRemoteConfigServiceMacros",
-            targets: ["AppRemoteConfigServiceMacros"]
-        ),
+        
+        .plugin(name: "AppRemoteConfigGenerator", targets: ["AppRemoteConfigGenerator"]),
+        .plugin(name: "AppRemoteConfigGeneratorCommand", targets: ["AppRemoteConfigGeneratorCommand"]),
+        
         .executable(
             name: "care",
             targets: ["care"]
@@ -38,9 +38,6 @@ let package = Package(
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.6"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.4.0"),
-        .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
-        .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
-        .package(url: "https://github.com/swiftlang/swift-syntax", "509.0.0"..<"602.0.0"),
     ],
     targets: [
         .target(
@@ -57,7 +54,7 @@ let package = Package(
             ]
         ),
         .target(
-            name: "AppRemoteConfigService",
+            name: "AppRemoteConfigClient",
             dependencies: [
                 "AppRemoteConfig",
                 .product(name: "Dependencies", package: "swift-dependencies"),
@@ -65,32 +62,33 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "AppRemoteConfigServiceTests",
+            name: "AppRemoteConfigClientTests",
             dependencies: [
-                "AppRemoteConfigService"
+                "AppRemoteConfigClient"
             ]
         ),
-        .target(
-            name: "AppRemoteConfigServiceMacros",
-            dependencies: [
-                "AppRemoteConfigServiceMacrosPlugin",
-                .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
-            ]
+        
+        // Build Plugin
+        .plugin(name: "AppRemoteConfigGenerator", capability: .buildTool(), dependencies: ["care"]),
+      
+        // Command Plugin
+        .plugin(
+            name: "AppRemoteConfigGeneratorCommand",
+            capability: .command(
+                intent: .custom(
+                    verb: "generate-code-for-app-remote-config",
+                    description: "Generate Swift code for an App Remote Config document."
+                ),
+                permissions: [
+                    .writeToPackageDirectory(
+                        reason: "To write the generated Swift files back into the source directory of the package."
+                    )
+                ]
+            ),
+            dependencies: ["care"]
         ),
-        .macro(
-            name: "AppRemoteConfigServiceMacrosPlugin",
-            dependencies: [
-                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-            ]
-        ),
-        .testTarget(
-            name: "AppRemoteConfigMacrosPluginTests",
-            dependencies: [
-                "AppRemoteConfigServiceMacrosPlugin",
-                .product(name: "MacroTesting", package: "swift-macro-testing"),
-            ]
-        ),
+
+        
         .executableTarget(
             name: "care",
             dependencies: [
@@ -101,22 +99,3 @@ let package = Package(
         )
     ]
 )
-
-// MARK: - Parse build arguments
-
-func hasEnvironmentVariable(_ name: String) -> Bool {
-  return ProcessInfo.processInfo.environment[name] != nil
-}
-
-var excludeService: Bool { hasEnvironmentVariable("EXCLUDE_SERVICE") }
-var excludeMacros: Bool { hasEnvironmentVariable("EXCLUDE_MACROS") }
-
-if excludeService {
-    package.targets.removeAll(where: { $0.name.contains("Service") })
-    package.products.removeAll(where: { $0.name.contains("Service") })
-}
-
-if excludeMacros {
-    package.targets.removeAll(where: { $0.name.contains("Macros") })
-    package.products.removeAll(where: { $0.name.contains("Macros") })
-}

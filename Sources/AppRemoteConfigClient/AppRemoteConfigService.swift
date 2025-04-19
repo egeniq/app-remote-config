@@ -14,49 +14,17 @@ enum AppRemoteConfigServiceError: Error {
     case keysMismatch(unhandled: Set<String>, incorrect: Set<String>, missing: Set<String>)
 }
 
-@MainActor
-protocol ValuesContainer: Sendable {
-    func apply(settings: [String: Any]) throws
-}
+typealias VerificationHandler = @Sendable (_ settings: [String: any Sendable]) throws -> ()
 
 /// A service to fetch a remote config from a URL periodically and when the app returns to the foreground.
-final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
-    func load<Value>(context _: Sharing.LoadContext<Value>, continuation: Sharing.LoadContinuation<Value>) {
-        fatalError()
-    }
+final class AppRemoteConfigService: Sendable {
     
-    func save<Value>(_ value: Value, context: Sharing.SaveContext, continuation: Sharing.SaveContinuation) {
-        fatalError()
-    }
-    
-    func subscribe<Value>(context _: Sharing.LoadContext<Value>, subscriber: Sharing.SharedSubscriber<Value>) -> Sharing.SharedSubscription {
-        fatalError()
-    }
-    
-     
-//     func fetch<T: Decodable>(
-//         key: String,
-//         completion: @escaping (Result<T, any Error>) -> Void
-//     ) {
-//         fatalError()
-//     }
-//     func addUpdateListener<T: Decodable>(
-//         key: String,
-//         subscriber: @escaping (Result<T, any Error>) -> Void
-//     ) -> AnyCancellable {
-//         fatalError()
-//     }
-//     
-     
     let url: URL
     let publicKey: String?
     let minimumRefreshInterval: TimeInterval
     let automaticRefreshInterval: TimeInterval
-    let bundledConfigURL: URL?
     let bundleIdentifier: String
-//    let apply: @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
-     let values: ValuesContainer
-     
+    
     let platform: Platform
     let platformVersion: OperatingSystemVersion
     let appVersion: Version
@@ -71,6 +39,11 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
     @MainActor
     private var config: Config!
     
+    @MainActor
+    private(set) var settings: [String: any Sendable] = [:]
+    
+    private let verificationHandler: VerificationHandler
+    
     /// Initializes service
     /// - Parameters:
     ///   - url: URL to remote config.
@@ -80,25 +53,25 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
     ///   - bundledConfigURL: URL to fallback configuration included in the app in case remote URL is unavailable and not cached.
     ///   - bundleIdentifier: Bundle identifier, recommended value is `Bundle.main.bundleIdentifier`
     ///   - apply: Method called with resolved settings for the app to use.
-    @MainActor
-    public init(
+    init(
         url: URL,
         publicKey: String?,
         minimumRefreshInterval: TimeInterval = 60,
         automaticRefreshInterval: TimeInterval = 300,
-        bundledConfigURL: URL? = nil,
+        //        bundledConfigURL: URL? = nil,
         bundleIdentifier: String,
-        values: ValuesContainer
-//        apply: @escaping @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
+        verificationHandler: @escaping VerificationHandler
+        //        apply: @escaping @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
     ) {
         self.url = url
         self.publicKey = publicKey
         self.minimumRefreshInterval = minimumRefreshInterval
         self.automaticRefreshInterval = automaticRefreshInterval
-        self.bundledConfigURL = bundledConfigURL
+        //        self.bundledConfigURL = bundledConfigURL
         self.bundleIdentifier = bundleIdentifier
-        self.values = values
-//        self.apply = apply
+        //        self.apply = apply
+        
+        self.verificationHandler = verificationHandler
         
 #if os(iOS) || os(tvOS)
         switch UIDevice.current.userInterfaceIdiom {
@@ -149,29 +122,30 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
             language = Locale.current.languageCode
         }
         
-        if let bundledConfigURL {
-            logger.debug("Reading bundled fallback")
-            // This is force unwrapped because the included fallback config must parse without issue
-            let data = try! Data(contentsOf: bundledConfigURL)
-            try! readConfig(from: data)
-        } else {
-            logger.debug("No bundled config provided")
-        }
-        
-        do {
-            if let localCacheURL {
-                logger.debug("Reading cache")
-                let data = try Data(contentsOf: localCacheURL)
-                try readConfig(from: data)
-            }
-        } catch {
-            // Ignore
-        }
-        
         Task {
+            //        if let bundledConfigURL {
+            //            logger.debug("Reading bundled fallback")
+            //            // This is force unwrapped because the included fallback config must parse without issue
+            //            let data = try! Data(contentsOf: bundledConfigURL)
+            //            try! await readConfig(from: data)
+            //        } else {
+            //            logger.debug("No bundled config provided")
+            //        }
+            
+            do {
+                if let localCacheURL {
+                    logger.debug("Reading cache")
+                    let data = try Data(contentsOf: localCacheURL)
+                    try await readConfig(from: data)
+                }
+            } catch {
+                // Ignore
+            }
+            
+            
             @Dependency(\.date.now) var now
-            resolveAndApply(date: now)
-  
+            await resolveAndApply(date: now)
+            
             do {
                 try await update()
             } catch {
@@ -209,6 +183,19 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
     }
     
     @MainActor
+    private func apply(_ settings: [String: any Sendable]) throws {
+        // Run validation
+        try verificationHandler(settings)
+        
+        self.settings = settings
+        
+        // Notify subscribers
+        subscribers.forEach { _, handler in
+            handler(settings)
+        }
+    }
+    
+    @MainActor
     private func readConfig(from data: Data) throws {
         if let publicKey {
             guard let publicKeyData = Data(base64Encoded: publicKey) else {
@@ -224,7 +211,7 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
     /// Trigger a refresh
     /// - Parameter enteringForeground: Indicate wether the app is entering the foreground
     @MainActor
-    public func update(enteringForeground: Bool = false) async throws {
+    func update(enteringForeground: Bool = false) async throws {
         @Dependency(\.date.now) var now
         if let lastSuccessfullFetch {
             guard abs(lastSuccessfullFetch.timeIntervalSinceNow) > minimumRefreshInterval else {
@@ -272,7 +259,7 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
     ///   - variant: The variant of the app that runs
     /// - Returns: Resolved settings
     @MainActor
-    public func resolve(date: Date, variant: String? = nil) -> [String: any Sendable] {
+    func resolve(date: Date, variant: String? = nil) -> [String: any Sendable] {
         config?.resolve(date: date, platform: platform, platformVersion: platformVersion, appVersion: appVersion, buildVariant: buildVariant, language: language) ?? [:]
     }
     
@@ -282,7 +269,7 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
     ///   - variant: The variant of the app that runs
     /// - Returns: List of relevant dates
     @MainActor
-    public func nextResolutionDate(after date: Date, variant: String? = nil) -> Date? {
+    func nextResolutionDate(after date: Date, variant: String? = nil) -> Date? {
        config?.relevantResolutionDates(platform: platform, platformVersion: platformVersion, appVersion: appVersion, buildVariant: buildVariant, language: language).first(where: { $0.timeIntervalSince(date) > 0 })
     }
     
@@ -292,7 +279,7 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
         let settings = resolve(date: date)
         logger.debug("Applying settings \(settings)")
         do {
-            try values.apply(settings: settings)
+            try apply(settings)
         } catch  {
             switch error {
             case let AppRemoteConfigServiceError.keysMismatch(unhandledKeys, incorrectKeys, missingKeys):
@@ -319,6 +306,26 @@ final class AppRemoteConfigService: Sendable, AppRemoteConfigClient {
             }
         } else {
             logger.debug("No next resolve needed")
+        }
+    }
+    
+    @MainActor
+    private var subscribers: [SubscriptionToken: UpdateHandler] = [:]
+    
+    typealias UpdateHandler = @Sendable (_ settings: [String: any Sendable]) -> Void
+    typealias SubscriptionToken = UUID
+    
+    func subscribe(handler: @escaping UpdateHandler) -> SubscriptionToken {
+        let uuid = UUID()
+        Task { @MainActor in
+            subscribers[uuid] = handler
+        }
+        return uuid
+    }
+    
+    func unsubscribe(_ token: SubscriptionToken) {
+        Task { @MainActor in
+            subscribers.removeValue(forKey: token)
         }
     }
 }
