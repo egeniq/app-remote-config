@@ -20,6 +20,10 @@ extension Care {
         var outputFile: URL
         
         mutating func run() throws {
+            guard !FileManager.default.fileExists(atPath: outputFile.path) else {
+                throw CareError.fileAlreadyExists
+            }
+            
             // Just writing text to disk, so we can add some helpful comments
             switch kind {
             case .yaml:
@@ -52,7 +56,7 @@ extension Care {
                  
                 # Or release a new feature at a specific time
                 - schedule:
-                    from: '2024-12-31T00:00:00Z'
+                    from: '2025-12-31T00:00:00Z'
                   settings:
                     coolFeature: true
                     
@@ -94,7 +98,7 @@ extension Care {
                         },
                         {
                             "schedule": {
-                                "from": "2024-12-31T00:00:00Z"
+                                "from": "2025-12-31T00:00:00Z"
                             },
                             "settings": {
                                 "coolFeature": true
@@ -108,18 +112,9 @@ extension Care {
                 """
                 try json.write(to: outputFile, atomically: true, encoding: .utf8)
             }
-            let data = try Data(contentsOf: outputFile)
-            let results = try Verify().verify(from: data).filter { $0.level != .info }
-            if results.isEmpty {
-                print("This configuration is \("created", effect: .green).")
-                print("\("[HINT]", effect: .cyan) Use the resolve command to verify the output is as expected for an app.")
-                print("\("[HINT]", effect: .cyan) Use the prepare command to prepare the configuration for publication.")
-            } else {
-                print("This configuration has \(results.count, effect: .bold) issue(s).")
-                results.forEach {
-                    print("\($0.level.text) \($0.message) - \($0.keyPath, effect: .faint)")
-                }
-            }
+            print("This configuration is \("created", effect: .green).")
+            print("\("[HINT]", effect: .cyan) Use the resolve command to verify the output is as expected for an app.")
+            print("\("[HINT]", effect: .cyan) Use the prepare command to prepare the configuration for publication.")
         }
     }
 }
