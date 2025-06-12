@@ -43,7 +43,7 @@ extension Config {
         }
     }
     
-    /// Lists all dates on which resolving the config could give other setings
+    /// Lists all dates on which resolving the config could give other settings
     /// - Parameters:
     ///   - platform: The platform on which the app runs
     ///   - platformVersion: The version of the platform on which the app runs

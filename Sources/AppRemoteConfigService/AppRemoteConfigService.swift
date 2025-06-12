@@ -240,7 +240,7 @@ public final class AppRemoteConfigService: Sendable {
         config?.resolve(date: date, platform: platform, platformVersion: platformVersion, appVersion: appVersion, buildVariant: buildVariant, language: language) ?? [:]
     }
     
-    /// Lists all dates on which resolving the config could give other setings
+    /// Lists all dates on which resolving the config could give other settings
     /// - Parameters:
     ///   - date: The date at which the settings are used
     ///   - variant: The variant of the app that runs
@@ -272,7 +272,7 @@ public final class AppRemoteConfigService: Sendable {
                     logger.warning("The key(s) \(missingKeys.joined(separator: ", ")) were not provided but expected.")
                 }
             default:
-                logger.error("Error encounted applying setings: \(error)")
+                logger.error("Error encounted applying settings: \(error)")
             }
         }
         if let nextDate = nextResolutionDate(after: date) {

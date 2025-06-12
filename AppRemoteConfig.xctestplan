@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "6FB7BB72-72FB-4651-B7C3-E32EA56378DD",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "AppRemoteConfigTests",
+        "name" : "AppRemoteConfigTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "AppRemoteConfigServiceTests",
+        "name" : "AppRemoteConfigServiceTests"
+      }
+    }
+  ],
+  "version" : 1
+}
