@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.2
 
 import CompilerPluginSupport
 import Foundation
@@ -19,6 +19,10 @@ let package = Package(
             targets: ["AppRemoteConfig"]
         ),
         .library(
+            name: "AppRemoteConfigProvider",
+            targets: ["AppRemoteConfigProvider"]
+        ),
+        .library(
             name: "AppRemoteConfigService",
             targets: ["AppRemoteConfigService"]
         ),
@@ -33,6 +37,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-configuration.git", from: "0.2.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.6"),
@@ -53,6 +58,20 @@ let package = Package(
             name: "AppRemoteConfigTests",
             dependencies: [
                 "AppRemoteConfig"
+            ]
+        ),
+        .target(
+            name: "AppRemoteConfigProvider",
+            dependencies: [
+                "AppRemoteConfig",
+                .product(name: "Configuration", package: "swift-configuration"),
+                .product(name: "Logging", package: "swift-log")
+            ]
+        ),
+        .testTarget(
+            name: "AppRemoteConfigProviderTests",
+            dependencies: [
+                "AppRemoteConfigProvider"
             ]
         ),
         .target(

@@ -63,6 +63,20 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AppRemoteConfigProvider"
+               BuildableName = "AppRemoteConfigProvider"
+               BlueprintName = "AppRemoteConfigProvider"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -99,6 +113,16 @@
                BlueprintIdentifier = "AppRemoteConfigTests"
                BuildableName = "AppRemoteConfigTests"
                BlueprintName = "AppRemoteConfigTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AppRemoteConfigProviderTests"
+               BuildableName = "AppRemoteConfigProviderTests"
+               BlueprintName = "AppRemoteConfigProviderTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
