@@ -11,9 +11,6 @@ public enum Platform: String, CaseIterable, Sendable {
     /// iOS on an iPad
     case iOS_iPad = "iOS.iPad"
     
-    /// iOS on an Apple TV
-    case iOS_tv = "iOS.TV"
-    
     /// iOS on CarPlay
     case iOS_carplay = "iOS.CarPlay"
     
@@ -25,6 +22,9 @@ public enum Platform: String, CaseIterable, Sendable {
     
     /// macOS
     case macOS = "macOS"
+    
+    /// tvOS 
+    case tvOS = "tvOS"
     
     /// watchOS
     case watchOS = "watchOS"
