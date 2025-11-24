@@ -73,7 +73,7 @@ public final class AppRemoteConfigService: Sendable {
         case .pad:
             platform = .iOS_iPad
         case .tv:
-            platform = .iOS_tv
+            platform = .tvOS
         case .carPlay:
             platform = .iOS_carplay
         case .mac:
@@ -197,7 +197,7 @@ public final class AppRemoteConfigService: Sendable {
             }
             if !enteringForeground {
 #if os(iOS) || os(tvOS)
-                guard await UIApplication.shared.applicationState == .background else {
+                guard UIApplication.shared.applicationState == .background else {
                     logger.debug("Skipping updating from remote: app in background")
                     return
                 }
