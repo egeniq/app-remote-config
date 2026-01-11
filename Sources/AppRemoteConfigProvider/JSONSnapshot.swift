@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if JSONSupport
+//#if JSONSupport
 
 import SystemPackage
 
@@ -440,4 +440,4 @@ internal func parseValues(
     return values
 }
 
-#endif
+//#endif

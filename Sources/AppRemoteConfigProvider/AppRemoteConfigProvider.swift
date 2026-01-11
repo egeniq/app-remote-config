@@ -1,4 +1,4 @@
-#if ReloadingSupport
+//#if ReloadingSupport
 
 #if canImport(FoundationEssentials)
 import FoundationEssentials
@@ -72,7 +72,7 @@ import Synchronization
 /// This expects a `url` key in the configuration that specifies the URL to the file.
 /// For a full list of configuration keys, check out ``RemoteFileProvider/init(snapshotType:parsingOptions:config:)``.
 /// 
-@available(Configuration 1.0, *)
+//@available(AppRemoteConfigProvider 1.0, *)
 public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendable {
 
     /// The internal storage structure for the provider state.
@@ -466,7 +466,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     }
 }
 
-@available(Configuration 1.0, *)
+//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: CustomStringConvertible {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public var description: String {
@@ -474,7 +474,7 @@ extension AppRemoteConfigProvider: CustomStringConvertible {
     }
 }
 
-@available(Configuration 1.0, *)
+//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: CustomDebugStringConvertible {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public var debugDescription: String {
@@ -482,7 +482,7 @@ extension AppRemoteConfigProvider: CustomDebugStringConvertible {
     }
 }
 
-@available(Configuration 1.0, *)
+//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: ConfigProvider {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public func value(forKey key: AbsoluteConfigKey, type: ConfigType) throws -> LookupResult {
@@ -562,7 +562,7 @@ extension AppRemoteConfigProvider: ConfigProvider {
     }
 }
 
-@available(Configuration 1.0, *)
+//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: Service {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public func run() async throws {
@@ -600,4 +600,4 @@ extension AppRemoteConfigProvider: Service {
     }
 }
 
-#endif
+//#endif

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if ReloadingSupport
+//#if ReloadingSupport
 
 #if canImport(FoundationEssentials)
 import FoundationEssentials
@@ -24,7 +24,7 @@ import Metrics
 /// Metrics for reloading file providers.
 ///
 /// This type provides standardized metrics for file-based providers that support hot reloading.
-internal struct ReloadingFileProviderMetrics {
+internal struct AppRemoteConfigProviderMetrics {
 
     /// Counter for poll tick operations.
     ///
@@ -81,4 +81,4 @@ internal struct ReloadingFileProviderMetrics {
     }
 }
 
-#endif
+//#endif

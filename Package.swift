@@ -37,14 +37,23 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-configuration.git", from: "0.2.0"),
+        .package(url: "https://github.com/apple/swift-configuration.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.6"),
+//        .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
+//        .package(url: "https://github.com/apple/swift-metrics", from: "2.7.0"),
+//        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.6"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
-        .package(url: "https://github.com/swiftlang/swift-syntax", "509.0.0"..<"601.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax", "509.0.0"..<"603.0.0"),
+
+
+            .package(url: "https://github.com/apple/swift-system", from: "1.5.0"),
+            .package(url: "https://github.com/apple/swift-collections", from: "1.3.0"),
+            .package(url: "https://github.com/swift-server/swift-service-lifecycle", from: "2.7.0"),
+            .package(url: "https://github.com/apple/swift-log", from: "1.6.3"),
+            .package(url: "https://github.com/apple/swift-metrics", from: "2.7.0"),
+            .package(url: "https://github.com/jpsim/Yams", "5.4.0"..<"7.0.0"),
     ],
     targets: [
         .target(
@@ -65,7 +74,12 @@ let package = Package(
             dependencies: [
                 "AppRemoteConfig",
                 .product(name: "Configuration", package: "swift-configuration"),
-                .product(name: "Logging", package: "swift-log")
+                .product(name: "Logging", package: "swift-log"),
+                .product(
+                    name: "Metrics",
+                    package: "swift-metrics",
+                 
+                ),
             ]
         ),
         .testTarget(

@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import SystemPackage
+import Configuration
 
 /// A type that provides parsing options for file configuration snapshots.
 ///
@@ -36,7 +37,7 @@ import SystemPackage
 ///     )
 /// }
 /// ```
-@available(Configuration 1.0, *)
+//@available(Configuration 1.0, *)
 
 
 public protocol AppRemoteConfigParsingOptions: Sendable {
@@ -76,7 +77,7 @@ public protocol AppRemoteConfigParsingOptions: Sendable {
 ///
 /// The snapshot is responsible for parsing the file data and converting it into a
 /// representation of configuration values that can be queried by the configuration system.
-@available(Configuration 1.0, *)
+//@available(Configuration 1.0, *)
 public protocol AppRemoteConfigConfigSnapshot: ConfigSnapshot, CustomStringConvertible,
     CustomDebugStringConvertible
 {
