@@ -1,5 +1,5 @@
-
-public import SystemPackage
+import Configuration
+import SystemPackage
 
 #if canImport(FoundationEssentials)
 import FoundationEssentials
@@ -21,13 +21,15 @@ import Foundation
 /// // Using with a JSON snapshot
 /// let jsonProvider = try await AppRemoteConfigProvider<JSONSnapshot>(
 ///     url: "https://www.example.com/config.json",
-///     publiceKey: "key here",
+///     publicKey: "key here",
 ///
 /// )
 ///
 /// // Using with a YAML snapshot
 /// let yamlProvider = try await FileProvider<YAMLSnapshot>(
-///     filePath: "/etc/config.yaml"
+///     filePath: "/etc/config.yaml" // remove?!
+///     url: "https://www.example.com/config.yaml",
+///     publicKey: "key here",
 /// )
 /// ```
 ///
@@ -51,54 +53,52 @@ public struct _AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendable {
     /// A snapshot of the internal state.
     private let _snapshot: Snapshot
 
-    /// Creates a file provider that reads from the specified file path.
-    ///
-    /// This initializer reads the file at the given path and creates a snapshot using the
-    /// specified snapshot type. The file is read once during initialization.
-    ///
-    /// - Parameters:
-    ///   - snapshotType: The type of snapshot to create from the file contents.
-    ///   - parsingOptions: Options used by the snapshot to parse the file data.
-    ///   - filePath: The path to the configuration file to read.
-    /// - Throws: If the file cannot be read or if snapshot creation fails.
-    public init(
-        snapshotType: Snapshot.Type = Snapshot.self,
-        parsingOptions: Snapshot.ParsingOptions = .default,
-//        filePath: FilePath
-        url: URL
-    ) async throws {
-        try await self.init(
-            snapshotType: snapshotType,
-            parsingOptions: parsingOptions,
-            filePath: filePath,
-            fileSystem: LocalCommonProviderFileSystem()
-        )
-    }
+//    /// Creates a file provider that reads from the specified file path.
+//    ///
+//    /// This initializer reads the file at the given path and creates a snapshot using the
+//    /// specified snapshot type. The file is read once during initialization.
+//    ///
+//    /// - Parameters:
+//    ///   - snapshotType: The type of snapshot to create from the file contents.
+//    ///   - parsingOptions: Options used by the snapshot to parse the file data.
+//    ///   - filePath: The path to the configuration file to read.
+//    /// - Throws: If the file cannot be read or if snapshot creation fails.
+//    public init(
+//        snapshotType: Snapshot.Type = Snapshot.self,
+//        parsingOptions: Snapshot.ParsingOptions = .default,
+//        url: URL
+//    ) async throws {
+//        try await self.init(
+//            snapshotType: snapshotType,
+//            parsingOptions: parsingOptions,
+//            url: url
+//        )
+//    }
 
-    /// Creates a file provider using a file path from a configuration reader.
-    ///
-    /// This initializer reads the file path from the provided configuration reader
-    /// and creates a snapshot from that file.
-    ///
-    /// ## Configuration keys
-    /// - `filePath` (string, required): The path to the configuration file to read.
-    ///
-    /// - Parameters:
-    ///   - snapshotType: The type of snapshot to create from the file contents.
-    ///   - parsingOptions: Options used by the snapshot to parse the file data.
-    ///   - config: A configuration reader that contains the required configuration keys.
-    /// - Throws: If the `filePath` key is missing, if the file cannot be read, or if snapshot creation fails.
-    public init(
-        snapshotType: Snapshot.Type = Snapshot.self,
-        parsingOptions: Snapshot.ParsingOptions = .default,
-        config: ConfigReader
-    ) async throws {
-        try await self.init(
-            snapshotType: snapshotType,
-            parsingOptions: parsingOptions,
-            filePath: config.requiredString(forKey: "filePath", as: FilePath.self)
-        )
-    }
+//    /// Creates a file provider using a file path from a configuration reader.
+//    ///
+//    /// This initializer reads the file path from the provided configuration reader
+//    /// and creates a snapshot from that file.
+//    ///
+//    /// ## Configuration keys
+//    /// - `filePath` (string, required): The path to the configuration file to read.
+//    ///
+//    /// - Parameters:
+//    ///   - snapshotType: The type of snapshot to create from the file contents.
+//    ///   - parsingOptions: Options used by the snapshot to parse the file data.
+//    ///   - config: A configuration reader that contains the required configuration keys.
+//    /// - Throws: If the `filePath` key is missing, if the file cannot be read, or if snapshot creation fails.
+//    public init(
+//        snapshotType: Snapshot.Type = Snapshot.self,
+//        parsingOptions: Snapshot.ParsingOptions = .default,
+//        config: ConfigReader
+//    ) async throws {
+//        try await self.init(
+//            snapshotType: snapshotType,
+//            parsingOptions: parsingOptions,
+//            url: config.requiredString(forKey: "url", as: URL.self)
+//        )
+//    }
 
     /// Creates a file provider.
     ///
@@ -114,10 +114,9 @@ public struct _AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendable {
     internal init(
         snapshotType: Snapshot.Type = Snapshot.self,
         parsingOptions: Snapshot.ParsingOptions,
-        filePath: FilePath,
-        fileSystem: some CommonProviderFileSystem
+        url: URL
     ) async throws {
-        let fileContents = try await fileSystem.fileContents(atPath: filePath)
+        let fileContents = try Data(contentsOf: url) // TODO: Do better!
         self._snapshot = try snapshotType.init(
             data: fileContents.bytes,
             providerName: "FileProvider<\(Snapshot.self)>",
@@ -125,63 +124,63 @@ public struct _AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendable {
         )
     }
 }
-
-extension AppRemoteConfigProvider: CustomStringConvertible {
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public var description: String {
-        _snapshot.description
-    }
-}
-
-extension AppRemoteConfigProvider: CustomDebugStringConvertible {
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public var debugDescription: String {
-        _snapshot.debugDescription
-    }
-}
-
-extension AppRemoteConfigProvider: ConfigProvider {
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public var providerName: String {
-        _snapshot.providerName
-    }
-
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public func value(
-        forKey key: AbsoluteConfigKey,
-        type: ConfigType
-    ) throws -> LookupResult {
-        try _snapshot.value(forKey: key, type: type)
-    }
-
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public func fetchValue(
-        forKey key: AbsoluteConfigKey,
-        type: ConfigType
-    ) async throws -> LookupResult {
-        try value(forKey: key, type: type)
-    }
-
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public func watchSnapshot<Return>(
-        updatesHandler: (ConfigUpdatesAsyncSequence<any ConfigSnapshot, Never>) async throws -> Return
-    ) async throws -> Return {
-        try await watchSnapshotFromSnapshot(updatesHandler: updatesHandler)
-    }
-
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public func watchValue<Return>(
-        forKey key: AbsoluteConfigKey,
-        type: ConfigType,
-        updatesHandler: (
-            ConfigUpdatesAsyncSequence<Result<LookupResult, any Error>, Never>
-        ) async throws -> Return
-    ) async throws -> Return {
-        try await watchValueFromValue(forKey: key, type: type, updatesHandler: updatesHandler)
-    }
-
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-    public func snapshot() -> any ConfigSnapshot {
-        _snapshot
-    }
-}
+//
+//extension AppRemoteConfigProvider: CustomStringConvertible {
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public var description: String {
+//        _snapshot.description
+//    }
+//}
+//
+//extension AppRemoteConfigProvider: CustomDebugStringConvertible {
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public var debugDescription: String {
+//        _snapshot.debugDescription
+//    }
+//}
+//
+//extension AppRemoteConfigProvider: ConfigProvider {
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public var providerName: String {
+//        _snapshot.providerName
+//    }
+//
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public func value(
+//        forKey key: AbsoluteConfigKey,
+//        type: ConfigType
+//    ) throws -> LookupResult {
+//        try _snapshot.value(forKey: key, type: type)
+//    }
+//
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public func fetchValue(
+//        forKey key: AbsoluteConfigKey,
+//        type: ConfigType
+//    ) async throws -> LookupResult {
+//        try value(forKey: key, type: type)
+//    }
+//
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public func watchSnapshot<Return>(
+//        updatesHandler: (ConfigUpdatesAsyncSequence<any ConfigSnapshot, Never>) async throws -> Return
+//    ) async throws -> Return {
+//        try await watchSnapshotFromSnapshot(updatesHandler: updatesHandler)
+//    }
+//
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public func watchValue<Return>(
+//        forKey key: AbsoluteConfigKey,
+//        type: ConfigType,
+//        updatesHandler: (
+//            ConfigUpdatesAsyncSequence<Result<LookupResult, any Error>, Never>
+//        ) async throws -> Return
+//    ) async throws -> Return {
+//        try await watchValueFromValue(forKey: key, type: type, updatesHandler: updatesHandler)
+//    }
+//
+//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+//    public func snapshot() -> any ConfigSnapshot {
+//        _snapshot
+//    }
+//}

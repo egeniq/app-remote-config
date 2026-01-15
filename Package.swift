@@ -9,7 +9,7 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [
         .iOS(.v13),
-        .macOS(.v11),
+        .macOS(.v15),
         .tvOS(.v13),
         .watchOS(.v6)
     ],
@@ -80,6 +80,7 @@ let package = Package(
                     package: "swift-metrics",
                  
                 ),
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle")
             ]
         ),
         .testTarget(

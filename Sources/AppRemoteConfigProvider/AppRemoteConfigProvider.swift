@@ -1,4 +1,5 @@
 //#if ReloadingSupport
+import AppRemoteConfig
 
 #if canImport(FoundationEssentials)
 import FoundationEssentials
@@ -12,6 +13,7 @@ public import Logging
 public import Metrics
 import AsyncAlgorithms
 import Synchronization
+import Configuration
 
 /// A configuration provider that reads configuration from an URL with automatic resolving and reloading capability.
 ///
@@ -84,8 +86,9 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         /// Last modified timestamp of the resolved file.
         var lastModifiedTimestamp: Date
 
-        /// The resolved real file path.
-        var realFilePath: FilePath
+//        /// The resolved real file path.
+//        var realFilePath: FilePath
+        var url: URL
 
         /// Active watchers for individual configuration values, keyed by encoded key.
         var valueWatchers: [AbsoluteConfigKey: [UUID: AsyncStream<Result<LookupResult, any Error>>.Continuation]]
@@ -120,32 +123,38 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     public let providerName: String
 
 //    environmentProvider
-    public private(set) var platform: Platform //{
+    public let platform: Platform //{
+//    public private(set) var platform: Platform //{
 //        didSet {
 //            reloadIfNeeded(logger: logger)
 //        }
 //    }
-    public private(set) var platformVersion: OperatingSystemVersion //{
+    public let platformVersion: OperatingSystemVersion //{
+//    public private(set) var platformVersion: OperatingSystemVersion //{
 //        didSet {
 //            reloadIfNeeded(logger: logger)
 //        }
 //    }
-    public private(set) var appVersion: Version //{
+    public let appVersion: Version //{
+//    public private(set) var appVersion: Version //{
 //        didSet {
 //            reloadIfNeeded(logger: logger)
 //        }
 //    }
-    public private(set) var variant: String? = nil //{
+    public let variant: String? = nil //{
+//    public private(set) var variant: String? = nil //{
 //        didSet {
 //            reloadIfNeeded(logger: logger)
 //        }
 //    }
-    public private(set) var buildVariant: BuildVariant // {
+    public let buildVariant: BuildVariant // {
+//    public private(set) var buildVariant: BuildVariant // {
 //        didSet {
 //            reloadIfNeeded(logger: logger)
 //        }
 //    }
-    public private(set) var language: String? = nil //{
+    public let language: String? = nil //{
+//    public private(set) var language: String? = nil //{
 //        didSet {
 //            reloadIfNeeded(logger: logger)
 //        }
@@ -159,14 +168,17 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         buildVariant: BuildVariant,
         language: String? = nil
     ) {
-        self.platform = platform
-        self.platformVersion = platformVersion
-        self.appVersion = appVersion
-        self.variant = variant
-        self.buildVariant = buildVariant
-        self.language = language
+        // Not Sendable...
+//        self.platform = platform
+//        self.platformVersion = platformVersion
+//        self.appVersion = appVersion
+//        self.variant = variant
+//        self.buildVariant = buildVariant
+//        self.language = language
         
-        reloadIfNeeded(logger: logger)
+        Task {
+            try? await reloadIfNeeded(logger: logger)
+        }
     }
     
     /// The logger for this provider instance.
@@ -180,7 +192,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         parsingOptions: Snapshot.ParsingOptions,
         url: URL,
         pollInterval: Duration,
-        fileSystem: any CommonProviderFileSystem,
+//        fileSystem: any CommonProviderFileSystem,
         logger: Logger,
         metrics: any MetricsFactory
     ) async throws {
@@ -188,11 +200,11 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         self.url = url
         self.pollInterval = pollInterval
         self.providerName = "AppRemoteConfigProvider<\(Snapshot.self)>"
-        self.fileSystem = fileSystem
+//        self.fileSystem = fileSystem
 
         // Set up the logger with metadata
         var logger = logger
-        logger[metadataKey: "\(providerName).filePath"] = .string(url.absoluteString ?? "<nil>")
+        logger[metadataKey: "\(providerName).url"] = .string(url.absoluteString)
         logger[metadataKey: "\(providerName).pollInterval.seconds"] = .string(
             pollInterval.components.seconds.description
         )
@@ -206,9 +218,11 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
 
         // Perform initial load
         logger.debug("Performing initial file load")
-        let realPath = try await fileSystem.resolveSymlinks(atPath: filePath)
-        let timestamp = try await fileSystem.lastModifiedTimestamp(atPath: realPath)
-        let data = try await fileSystem.fileContents(atPath: realPath)
+//        let realPath = try await fileSystem.resolveSymlinks(atPath: filePath)
+//        let timestamp = try await fileSystem.lastModifiedTimestamp(atPath: realPath)
+//        let data = try await fileSystem.fileContents(atPath: realPath)
+        let timestamp = Date()
+        let data = try Data(contentsOf: url)
         let initialSnapshot = try snapshotType.init(
             data: data.bytes,
             providerName: providerName,
@@ -220,7 +234,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             .init(
                 snapshot: initialSnapshot,
                 lastModifiedTimestamp: timestamp,
-                realFilePath: realPath,
+                url: url,
+//                realFilePath: realPath,
                 valueWatchers: [:],
                 snapshotWatchers: [:]
             )
@@ -230,43 +245,44 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         self.metrics.fileSize.record(data.count)
 
         logger.debug(
-            "Successfully initialized reloading file provider",
+            "Successfully initialized reloading app remote config provider",
             metadata: [
-                "\(providerName).realFilePath": .string(realPath.string),
+                "\(providerName).url": .string(url.absoluteString),
                 "\(providerName).initialTimestamp": .stringConvertible(timestamp.formatted(.iso8601)),
                 "\(providerName).fileSize": .stringConvertible(data.count),
             ]
         )
     }
 
-    /// Creates a reloading file provider that monitors the specified file path.
-    ///
-    /// - Parameters:
-    ///   - snapshotType: The type of snapshot to create from the file contents.
-    ///   - parsingOptions: Options used by the snapshot to parse the file data.
-    ///   - filePath: The path to the configuration file to monitor.
-    ///   - pollInterval: How often to check for file changes.
-    ///   - logger: The logger instance to use for this provider.
-    ///   - metrics: The metrics factory to use for monitoring provider performance.
-    /// - Throws: If the file cannot be read or if snapshot creation fails.
-    public convenience init(
-        snapshotType: Snapshot.Type = Snapshot.self,
-        parsingOptions: Snapshot.ParsingOptions = .default,
-        filePath: FilePath,
-        pollInterval: Duration = .seconds(15),
-        logger: Logger = Logger(label: "AppRemoteConfigProvider"),
-        metrics: any MetricsFactory = MetricsSystem.factory
-    ) async throws {
-        try await self.init(
-            snapshotType: snapshotType,
-            parsingOptions: parsingOptions,
-            filePath: filePath,
-            pollInterval: pollInterval,
-            fileSystem: LocalCommonProviderFileSystem(),
-            logger: logger,
-            metrics: metrics
-        )
-    }
+//    /// Creates a reloading file provider that monitors the specified file path.
+//    ///
+//    /// - Parameters:
+//    ///   - snapshotType: The type of snapshot to create from the file contents.
+//    ///   - parsingOptions: Options used by the snapshot to parse the file data.
+//    ///   - filePath: The path to the configuration file to monitor.
+//    ///   - pollInterval: How often to check for file changes.
+//    ///   - logger: The logger instance to use for this provider.
+//    ///   - metrics: The metrics factory to use for monitoring provider performance.
+//    /// - Throws: If the file cannot be read or if snapshot creation fails.
+//    public convenience init(
+//        snapshotType: Snapshot.Type = Snapshot.self,
+//        parsingOptions: Snapshot.ParsingOptions = .default,
+////        filePath: FilePath,
+//        url: URL,
+//        pollInterval: Duration = .seconds(15),
+//        logger: Logger = Logger(label: "AppRemoteConfigProvider"),
+//        metrics: any MetricsFactory = MetricsSystem.factory
+//    ) async throws {
+//        try await self.init(
+//            snapshotType: snapshotType,
+//            parsingOptions: parsingOptions,
+//            url: url,
+//            pollInterval: pollInterval,
+////            fileSystem: LocalCommonProviderFileSystem(),
+//            logger: logger,
+//            metrics: metrics
+//        )
+//    }
 
     /// Creates a reloading file provider using configuration from a reader.
     ///
@@ -293,9 +309,9 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         try await self.init(
             snapshotType: snapshotType,
             parsingOptions: parsingOptions,
-            filePath: config.requiredString(forKey: "filePath", as: FilePath.self),
+            url: config.requiredString(forKey: "url", as: URL.self),
             pollInterval: .seconds(config.int(forKey: "pollIntervalSeconds", default: 15)),
-            fileSystem: LocalCommonProviderFileSystem(),
+//            fileSystem: LocalCommonProviderFileSystem(),
             logger: logger,
             metrics: metrics
         )
@@ -316,15 +332,15 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             logger.debug("reloadIfNeeded finished")
         }
 
-        let candidateRealPath = try await fileSystem.resolveSymlinks(atPath: filePath)
-        let candidateTimestamp = try await fileSystem.lastModifiedTimestamp(atPath: candidateRealPath)
+        let candidateRealPath = url // try await fileSystem.resolveSymlinks(atPath: filePath)
+        let candidateTimestamp = Date() // fileSystem.lastModifiedTimestamp(atPath: candidateRealPath)
 
         guard
             let (originalTimestamp, originalRealPath) =
                 storage
-                .withLock({ storage -> (Date, FilePath)? in
+                .withLock({ storage -> (Date, URL)? in
                     let originalTimestamp = storage.lastModifiedTimestamp
-                    let originalRealPath = storage.realFilePath
+                    let originalRealPath = storage.url
 
                     // Check if either the real path or timestamp has changed
                     guard originalRealPath != candidateRealPath || originalTimestamp != candidateTimestamp else {
@@ -332,7 +348,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                             "File path and timestamp unchanged, no reload needed",
                             metadata: [
                                 "\(providerName).timestamp": .stringConvertible(originalTimestamp.formatted(.iso8601)),
-                                "\(providerName).realPath": .string(originalRealPath.string),
+                                "\(providerName).realPath": .string(originalRealPath.absoluteString),
                             ]
                         )
                         return nil
@@ -349,13 +365,13 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             metadata: [
                 "\(providerName).originalTimestamp": .stringConvertible(originalTimestamp.formatted(.iso8601)),
                 "\(providerName).candidateTimestamp": .stringConvertible(candidateTimestamp.formatted(.iso8601)),
-                "\(providerName).originalRealPath": .string(originalRealPath.string),
-                "\(providerName).candidateRealPath": .string(candidateRealPath.string),
+                "\(providerName).originalRealPath": .string(originalRealPath.absoluteString),
+                "\(providerName).candidateRealPath": .string(candidateRealPath.absoluteString),
             ]
         )
 
         // Load new data outside the lock
-        let data = try await fileSystem.fileContents(atPath: candidateRealPath)
+        let data = try Data(contentsOf: url) // fileSystem.fileContents(atPath: candidateRealPath)
         let newSnapshot = try Snapshot.init(
             data: data.bytes,
             providerName: providerName,
@@ -374,7 +390,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 .withLock({ storage -> (ValueWatchers, SnapshotWatchers)? in
 
                     // Check if we lost the race with another caller
-                    if storage.lastModifiedTimestamp != originalTimestamp || storage.realFilePath != originalRealPath {
+                    if storage.lastModifiedTimestamp != originalTimestamp || storage.url != originalRealPath {
                         return nil
                     }
 
@@ -382,14 +398,14 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                     let oldSnapshot = storage.snapshot
                     storage.snapshot = newSnapshot
                     storage.lastModifiedTimestamp = candidateTimestamp
-                    storage.realFilePath = candidateRealPath
+                    storage.url = candidateRealPath
 
                     logger.debug(
                         "Successfully reloaded file",
                         metadata: [
                             "\(providerName).timestamp": .stringConvertible(candidateTimestamp.formatted(.iso8601)),
                             "\(providerName).fileSize": .stringConvertible(data.count),
-                            "\(providerName).realPath": .string(candidateRealPath.string),
+                            "\(providerName).realPath": .string(candidateRealPath.absoluteString),
                         ]
                     )
 
