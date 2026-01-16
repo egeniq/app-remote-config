@@ -643,9 +643,15 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 return
             }
             let delay = date.timeIntervalSinceNow
+            print("[AppRemoteConfigProvider] Scheduling resolution timer for \(String(format: "%.1f", delay)) seconds from now")
+            logger.debug("Scheduling resolution timer", metadata: [
+                "delay_seconds": .stringConvertible(delay),
+                "scheduled_for": .string(date.formatted(.iso8601))
+            ])
             let task = Task.detached { [weak self] in
                 let nanoseconds = UInt64(max(delay, 0) * 1_000_000_000)
                 try? await Task.sleep(nanoseconds: nanoseconds)
+                print("[AppRemoteConfigProvider] Timer fired! Performing scheduled resolution")
                 await self?.performScheduledResolution(at: date)
             }
             storage.scheduledTimers[UUID()] = task
@@ -655,7 +661,11 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
 
     /// Recompute resolved snapshot at a scheduled date and notify watchers.
     private func performScheduledResolution(at date: Date) async {
+        logger.debug("Performing scheduled resolution", metadata: [
+            "scheduled_date": .string(date.formatted(.iso8601))
+        ])
         typealias ValueWatchers = [(
+
             AbsoluteConfigKey,
             Result<LookupResult, any Error>,
             [AsyncStream<Result<LookupResult, any Error>>.Continuation]
