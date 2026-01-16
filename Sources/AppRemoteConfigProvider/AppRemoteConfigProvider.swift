@@ -247,7 +247,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         // Perform initial load
         logger.debug("Performing initial file load")
         let timestamp = Date()
-        let loadedData = try Data(contentsOf: url)
+        let (loadedData, _) = try await URLSession.shared.data(from: url)
         
         // If public key is provided, verify signature and extract the actual config data
         let (actualConfigData, initialSnapshot): (Data, Snapshot)
@@ -566,7 +566,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         )
 
         // Load new data outside the lock
-        let loadedData = try Data(contentsOf: url)
+        let (loadedData, _) = try await URLSession.shared.data(from: url)
         
         // If public key is provided, verify and extract signed config
         let (actualData, newSnapshot): (Data, Snapshot)
