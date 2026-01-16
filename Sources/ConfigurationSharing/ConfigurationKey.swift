@@ -6,22 +6,24 @@ import Sharing
 /// A sharing key that reads and observes values from a `ConfigProvider`.
 ///
 /// This key integrates the Swift Configuration library with the Swift Sharing library,
-/// allowing you to use `@Shared` properties backed by configuration providers.
+/// allowing you to use `@SharedReader` properties backed by configuration providers.
 ///
 /// Example usage:
 /// ```swift
-/// @Shared(.configuration("apiEndpoint", default: "https://api.example.com"))
+/// @SharedReader(.configuration("apiEndpoint", default: "https://api.example.com"))
 /// var apiEndpoint: String
 ///
-/// @Shared(.configuration("timeout", default: 30))
+/// @SharedReader(.configuration("timeout", default: 30))
 /// var timeout: Int
 ///
-/// @Shared(.configuration("features.betaMode", default: false))
+/// @SharedReader(.configuration("features.betaMode", default: false))
 /// var betaMode: Bool
 /// ```
 ///
 /// The key automatically observes the configuration provider for changes and updates
 /// the shared value when the underlying configuration changes.
+///
+/// Note: Configuration is read-only, so only `@SharedReader` is supported.
 public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     private let key: String
     private let defaultValue: Value
@@ -92,6 +94,12 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
         return SharedSubscription {
             task.cancel()
         }
+    }
+    
+    /// Write operations are not supported for configuration values (read-only).
+    /// This method is provided for `SharedReaderKey` conformance but does nothing.
+    public func set(_ value: Value, context: LoadContext<Value>) {
+        // Configuration is read-only, so writes are ignored
     }
     
     private func readValue() throws -> Value? {

@@ -1,14 +1,14 @@
 # ConfigurationSharing
 
-A module that integrates Swift Configuration with Swift Sharing, enabling reactive shared configuration state using the `@Shared` property wrapper.
+A module that integrates Swift Configuration with Swift Sharing, enabling reactive shared configuration state using the `@SharedReader` property wrapper.
 
 ## Overview
 
-ConfigurationSharing provides a `ConfigurationKey` that conforms to Swift Sharing's `SharedReaderKey` protocol, allowing you to use configuration values with the `@Shared` property wrapper for reactive, observable configuration management.
+ConfigurationSharing provides a `ConfigurationKey` that conforms to Swift Sharing's `SharedReaderKey` protocol, allowing you to use configuration values with the `@SharedReader` property wrapper for reactive, observable configuration management.
 
 ## Features
 
-- **Reactive Configuration**: Use `@Shared` to automatically observe configuration changes
+- **Reactive Configuration**: Use `@SharedReader` to automatically observe configuration changes
 - **Type-Safe Access**: Support for `String`, `Int`, `Double`, `Bool`, and `[String]` types
 - **Provider Integration**: Works with any `ConfigProvider` from Swift Configuration
 - **Dependency Injection**: Supports default providers via Swift Dependencies
@@ -23,14 +23,14 @@ import ConfigurationSharing
 import Sharing
 
 // Use with a default value
-@Shared(.configuration("apiEndpoint", default: "https://api.example.com"))
-var apiEndpoint: String
+@SharedReader(.configuration("apiEndpoint", default: "https://api.example.com"))
+var apiEndpoint = "https://api.example.com"
 
-@Shared(.configuration("timeout", default: 30))
-var timeout: Int
+@SharedReader(.configuration("timeout", default: 30))
+var timeout = 30
 
-@Shared(.configuration("features.betaMode", default: false))
-var betaMode: Bool
+@SharedReader(.configuration("features.betaMode", default: false))
+var betaMode = false
 ```
 
 ### With a Specific Provider
@@ -42,8 +42,8 @@ import Sharing
 
 let provider = AppRemoteConfigProvider<JSONSnapshot>(/* ... */)
 
-@Shared(.configuration("features.newUI", default: false, provider: provider))
-var newUI: Bool
+@SharedReader(.configuration("features.newUI", default: false, provider: provider))
+var newUI = false
 ```
 
 ### Setting a Default Provider
@@ -70,34 +70,34 @@ struct MyApp: App {
 }
 ```
 
-Then use `@Shared` without specifying a provider:
+Then use `@SharedReader` without specifying a provider:
 
 ```swift
-@Shared(.configuration("features.darkMode", default: false))
-var darkMode: Bool
+@SharedReader(.configuration("features.darkMode", default: false))
+var darkMode = false
 ```
 
 ## Automatic Updates
 
-The `ConfigurationKey` automatically subscribes to changes in the underlying configuration provider. When the configuration changes (e.g., from a remote update or file change), all `@Shared` properties backed by that configuration will update automatically.
+The `ConfigurationKey` automatically subscribes to changes in the underlying configuration provider. When the configuration changes (e.g., from a remote update or file change), all `@SharedReader` properties backed by that configuration will update automatically.
 
 ```swift
 struct SettingsView: View {
-    @Shared(.configuration("features.betaMode", default: false))
-    var betaMode: Bool
+    @SharedReader(.configuration("features.betaMode", default: false))
+    var betaMode = false
     
     var body: some View {
-        Toggle("Beta Mode", isOn: $betaMode)
-            // Note: Setting the value won't save it (read-only)
-            // This toggle will reflect the current config value
-            // and update automatically when the config changes
+        Text(betaMode ? "Beta Mode: ON" : "Beta Mode: OFF")
+            // The view automatically updates when the config changes
+            // Configuration is read-only, so values cannot be modified
+            // from the UI
     }
 }
 ```
 
 ## Supported Types
 
-The following types are supported via the `ConfigValue` protocol:
+The following types are supported via the `ConfigPrimitiveValue` protocol:
 
 - `String`
 - `Int`
