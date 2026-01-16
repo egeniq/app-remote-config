@@ -7,6 +7,7 @@ This example demonstrates how to integrate `AppRemoteConfigProvider` into a Swif
 The example app shows:
 - **Provider Initialization**: Setting up `AppRemoteConfigProvider` with resolution context
 - **ServiceGroup Integration**: Running provider as a service to enable automatic polling
+- **Foreground Refresh**: Automatically refreshes configuration when app returns to foreground
 - **Logging**: Using `swift-log` Logger to see provider activity in console
 - **Configuration Management**: Reading and displaying remote configuration values
 - **SwiftUI Integration**: Using `@ObservedObject` and state management to display config values
@@ -22,6 +23,7 @@ The example app shows:
 - Fetches OS version once using `ProcessInfo.processInfo.operatingSystemVersion`
 - Creates a Logger instance to track provider activity
 - Sets up ServiceGroup to run the provider as a service (enables polling)
+- Monitors scene phase to refresh configuration when app comes to foreground
 - Demonstrates async provider instantiation with error handling
 - Logs initialization details for debugging
 
@@ -244,7 +246,36 @@ Task {
 
 Without the ServiceGroup, the provider will only load the configuration once at initialization and won't poll for updates.
 
-### 3. Reading Configuration Values
+### 3. Foreground Refresh
+
+The example automatically refreshes configuration when the app returns to the foreground using SwiftUI's scene phase monitoring:
+
+```swift
+@Environment(\.scenePhase) private var scenePhase
+
+var body: some Scene {
+    WindowGroup {
+        // ... your content ...
+    }
+    .onChange(of: scenePhase) { oldPhase, newPhase in
+        if newPhase == .active {
+            // Refresh configuration when app comes to foreground
+            Task {
+                await viewModel?.refresh()
+            }
+        }
+    }
+}
+```
+
+This ensures users always get the latest configuration when:
+- Returning from background
+- Switching back from another app
+- Unlocking the device
+
+The refresh respects the `minimumRefreshInterval` to avoid excessive API calls.
+
+### 4. Reading Configuration Values
 ```swift
 // Access provider through ConfigReader
 let reader = ConfigReader(provider: provider)
@@ -253,7 +284,7 @@ let timeout = reader.int(forKey: "timeout", default: 30)
 let betaMode = reader.bool(forKey: "features.betaMode", default: false)
 ```
 
-### 4. SwiftUI State Binding
+### 5. SwiftUI State Binding
 ```swift
 @ObservedObject var viewModel: ContentViewViewModel
 

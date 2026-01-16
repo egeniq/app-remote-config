@@ -11,6 +11,7 @@ struct SwiftUIExampleApp: App {
     @State private var viewModel: ContentViewViewModel?
     @State private var error: String?
     @State private var serviceGroup: ServiceGroup?
+    @Environment(\.scenePhase) private var scenePhase
     
     var body: some Scene {
         WindowGroup {
@@ -24,6 +25,14 @@ struct SwiftUIExampleApp: App {
                         .task {
                             await initializeProvider()
                         }
+                }
+            }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                if newPhase == .active {
+                    // Refresh configuration when app comes to foreground
+                    Task {
+                        await viewModel?.refresh()
+                    }
                 }
             }
         }
