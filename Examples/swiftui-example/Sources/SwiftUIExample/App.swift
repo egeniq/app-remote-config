@@ -130,11 +130,12 @@ struct SwiftUIExampleApp: App {
     /// Create an example configuration JSON file
     private func createExampleConfigFile() throws -> URL {
         let scheduledStart = ISO8601DateFormatter().string(from: Date().addingTimeInterval(3))
+        let scheduledEnd = ISO8601DateFormatter().string(from: Date().addingTimeInterval(13))
         let exampleConfig: [String: Any] = [
             "settings": [
                 "appName": "Remote Config Example App",
                 "features": [
-                    "betaMode": true,
+                    "betaMode": false,
                     "newUI": false,
                     "darkMode": true
                 ],
@@ -145,7 +146,8 @@ struct SwiftUIExampleApp: App {
             "overrides": [
                 [
                     "schedule": [
-                        "from": scheduledStart
+                        "from": scheduledStart,
+                        "until": scheduledEnd
                     ],
                     "settings": [
                         "features": [

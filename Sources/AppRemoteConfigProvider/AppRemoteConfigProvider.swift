@@ -788,7 +788,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         buildVariant: BuildVariant,
         language: String?
     ) throws -> [String: Sendable] {
-        let outcome: ([String: Sendable], Date?) = try storage.withLock { storage in
+        let outcome: ([String: Sendable], Date?, Date?) = try storage.withLock { storage in
             let cacheKey = contextCacheKey(
                 platform: platform,
                 platformVersion: platformVersion,
@@ -813,8 +813,11 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             
             // If context unchanged and no scheduled date has passed, return cached values
             if contextUnchanged && noScheduledDatePassed, let cached = storage.resolvedSettingsCache[cacheKey] {
-                return (cached, storage.nextResolutionDate)
+                return (cached, storage.nextResolutionDate, storage.nextResolutionDate)
             }
+            
+            // Capture the old next resolution date before updating
+            let oldNextResolutionDate = storage.nextResolutionDate
             
             // Create Config from raw data
             let config = try Config(data: storage.rawData)
@@ -854,12 +857,15 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             // Find the next date after now
             storage.nextResolutionDate = relevantDates.first { $0 > now }
             
-            return (resolvedSettings, storage.nextResolutionDate)
+            return (resolvedSettings, storage.nextResolutionDate, oldNextResolutionDate)
         }
-        // Schedule timer outside lock (also clears existing timer when nil)
+        // Schedule timer outside lock only if date changed (to avoid scheduling multiple times)
         // Only schedule in non-test environments
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            scheduleResolutionTimer(for: outcome.1)
+            let (_, newDate, oldDate) = outcome
+            if newDate != oldDate {
+                scheduleResolutionTimer(for: newDate)
+            }
         }
         return outcome.0
     }
