@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:app-remote-config}",
+            "name": "Debug care",
+            "target": "care",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug care"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:app-remote-config}",
+            "name": "Release care",
+            "target": "care",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release care"
+        }
+    ]
+}
