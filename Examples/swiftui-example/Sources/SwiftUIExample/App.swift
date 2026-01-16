@@ -6,6 +6,7 @@ import Configuration
 import Logging
 import ServiceLifecycle
 
+@available(iOS 18.0, *)
 @main
 struct SwiftUIExampleApp: App {
     @State private var viewModel: ContentViewViewModel?

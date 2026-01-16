@@ -8,7 +8,7 @@ let package = Package(
     name: "AppRemoteConfig",
     defaultLocalization: "en",
     platforms: [
-        .iOS(.v13),
+        .iOS(.v18),
         .macOS(.v15),
         .tvOS(.v13),
         .watchOS(.v6)

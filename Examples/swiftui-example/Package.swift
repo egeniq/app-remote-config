@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "SwiftUIExample",
     platforms: [
-        .iOS(.v17),
+        .iOS(.v18),
         .macOS(.v15)
     ],
     products: [
@@ -21,6 +21,9 @@ let package = Package(
                 .product(name: "AppRemoteConfigProvider", package: "app-remote-config"),
                 .product(name: "AppRemoteConfig", package: "app-remote-config"),
                 .product(name: "Configuration", package: "swift-configuration")
+            ],
+            exclude: [
+                "Resources/Info.plist"
             ]
         )
     ]

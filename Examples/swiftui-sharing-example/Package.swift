@@ -24,6 +24,9 @@ let package = Package(
                 .product(name: "ConfigurationSharing", package: "app-remote-config"),
                 .product(name: "Configuration", package: "swift-configuration"),
                 .product(name: "Sharing", package: "swift-sharing")
+            ],
+            exclude: [
+                "Resources/Info.plist"
             ]
         )
     ]

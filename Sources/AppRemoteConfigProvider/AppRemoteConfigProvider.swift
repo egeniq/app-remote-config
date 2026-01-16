@@ -101,6 +101,7 @@ public import Configuration
 /// This expects a `url` key in the configuration that specifies the URL to the file.
 /// For a full list of configuration keys, check out ``AppRemoteConfigProvider/init``.
 ///
+@available(iOS 18.0, *)
 public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendable {
 
     /// The internal storage structure for the provider state.
@@ -893,6 +894,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     }
 }
 
+@available(iOS 18.0, *)
 extension AppRemoteConfigProvider: CustomStringConvertible {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public var description: String {
@@ -900,6 +902,7 @@ extension AppRemoteConfigProvider: CustomStringConvertible {
     }
 }
 
+@available(iOS 18.0, *)
 extension AppRemoteConfigProvider: CustomDebugStringConvertible {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public var debugDescription: String {
@@ -907,6 +910,7 @@ extension AppRemoteConfigProvider: CustomDebugStringConvertible {
     }
 }
 
+@available(iOS 18.0, *)
 extension AppRemoteConfigProvider: ConfigProvider {
     
     /// Retrieves a configuration value for the specified key.
@@ -1100,6 +1104,7 @@ extension AppRemoteConfigProvider: ConfigProvider {
     }
 }
 
+@available(iOS 18.0, *)
 extension AppRemoteConfigProvider: Service {
     
     /// Runs the service's main polling loop.

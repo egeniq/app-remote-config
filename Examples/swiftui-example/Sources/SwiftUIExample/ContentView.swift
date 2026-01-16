@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Main content view displaying remote configuration values
+@available(iOS 18.0, *)
 struct ContentView: View {
     @ObservedObject var viewModel: ContentViewViewModel
     @Environment(\.colorScheme) var colorScheme

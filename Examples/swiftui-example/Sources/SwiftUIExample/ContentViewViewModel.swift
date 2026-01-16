@@ -3,6 +3,7 @@ import Configuration
 import AppRemoteConfigProvider
 
 /// View model that reads configuration values and exposes them to SwiftUI
+@available(iOS 18.0, *)
 @MainActor
 class ContentViewViewModel: ObservableObject {
     @Published var appName: String = "Loading..."
