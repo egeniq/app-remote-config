@@ -10,14 +10,14 @@ import Sharing
 ///
 /// Example usage:
 /// ```swift
-/// @SharedReader(.configuration("apiEndpoint", default: "https://api.example.com"))
-/// var apiEndpoint: String
+/// @SharedReader(.configuration("apiEndpoint"))
+/// var apiEndpoint = "https://api.example.com"
 ///
-/// @SharedReader(.configuration("timeout", default: 30))
-/// var timeout: Int
+/// @SharedReader(.configuration("timeout"))
+/// var timeout = 30
 ///
-/// @SharedReader(.configuration("features.betaMode", default: false))
-/// var betaMode: Bool
+/// @SharedReader(.configuration("features.betaMode"))
+/// var betaMode = false
 /// ```
 ///
 /// The key automatically observes the configuration provider for changes and updates
@@ -26,7 +26,6 @@ import Sharing
 /// Note: Configuration is read-only, so only `@SharedReader` is supported.
 public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     private let key: String
-    private let defaultValue: Value
     private let provider: any ConfigProvider
     
     public var id: ConfigurationKeyID {
@@ -37,10 +36,8 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     ///
     /// - Parameters:
     ///   - key: The configuration key path (dot-separated for nested values)
-    ///   - default: The default value to use if the key is not found
-    public init(_ key: String, default defaultValue: Value) where Value: ConfigPrimitiveValue {
+    public init(_ key: String) where Value: ConfigPrimitiveValue {
         self.key = key
-        self.defaultValue = defaultValue
         @Dependency(\.defaultConfigurationProvider) var provider
         self.provider = provider
     }
@@ -49,11 +46,9 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     ///
     /// - Parameters:
     ///   - key: The configuration key path (dot-separated for nested values)
-    ///   - default: The default value to use if the key is not found
     ///   - provider: The configuration provider to read from
-    public init(_ key: String, default defaultValue: Value, provider: any ConfigProvider) where Value: ConfigPrimitiveValue {
+    public init(_ key: String, provider: any ConfigProvider) where Value: ConfigPrimitiveValue {
         self.key = key
-        self.defaultValue = defaultValue
         self.provider = provider
     }
     
@@ -79,9 +74,13 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
                         let value: Value
                         switch result {
                         case .success(let lookupResult):
-                            value = extractValue(from: lookupResult) ?? defaultValue
+                            if let extractedValue = extractValue(from: lookupResult) {
+                                value = extractedValue
+                            } else {
+                                continue // Skip if value cannot be extracted
+                            }
                         case .failure:
-                            value = defaultValue
+                            continue // Skip on error
                         }
                         subscriber.yield(with: .success(value))
                     }
@@ -176,96 +175,61 @@ extension Array: ConfigPrimitiveValue where Element == String {}
 /// Extension to make ConfigurationKey more ergonomic to use
 extension SharedReaderKey where Self == ConfigurationKey<String> {
     /// Creates a configuration key for a string value.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: String
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue)
+    public static func configuration(_ key: String) -> Self {
+        ConfigurationKey(key)
     }
     
     /// Creates a configuration key for a string value with a specific provider.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: String,
-        provider: any ConfigProvider
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue, provider: provider)
+    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
+        ConfigurationKey(key, provider: provider)
     }
 }
 
 extension SharedReaderKey where Self == ConfigurationKey<Int> {
     /// Creates a configuration key for an integer value.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: Int
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue)
+    public static func configuration(_ key: String) -> Self {
+        ConfigurationKey(key)
     }
     
     /// Creates a configuration key for an integer value with a specific provider.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: Int,
-        provider: any ConfigProvider
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue, provider: provider)
+    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
+        ConfigurationKey(key, provider: provider)
     }
 }
 
 extension SharedReaderKey where Self == ConfigurationKey<Double> {
     /// Creates a configuration key for a double value.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: Double
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue)
+    public static func configuration(_ key: String) -> Self {
+        ConfigurationKey(key)
     }
     
     /// Creates a configuration key for a double value with a specific provider.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: Double,
-        provider: any ConfigProvider
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue, provider: provider)
+    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
+        ConfigurationKey(key, provider: provider)
     }
 }
 
 extension SharedReaderKey where Self == ConfigurationKey<Bool> {
     /// Creates a configuration key for a boolean value.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: Bool
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue)
+    public static func configuration(_ key: String) -> Self {
+        ConfigurationKey(key)
     }
     
     /// Creates a configuration key for a boolean value with a specific provider.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: Bool,
-        provider: any ConfigProvider
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue, provider: provider)
+    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
+        ConfigurationKey(key, provider: provider)
     }
 }
 
 extension SharedReaderKey where Self == ConfigurationKey<[String]> {
     /// Creates a configuration key for a string array value.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: [String]
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue)
+    public static func configuration(_ key: String) -> Self {
+        ConfigurationKey(key)
     }
     
     /// Creates a configuration key for a string array value with a specific provider.
-    public static func configuration(
-        _ key: String,
-        default defaultValue: [String],
-        provider: any ConfigProvider
-    ) -> Self {
-        ConfigurationKey(key, default: defaultValue, provider: provider)
+    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
+        ConfigurationKey(key, provider: provider)
     }
 }
 

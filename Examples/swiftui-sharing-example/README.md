@@ -51,7 +51,7 @@ struct ContentView: View {
 ### After (swiftui-sharing-example)
 ```swift
 struct ContentView: View {
-    @SharedReader(.configuration("features.betaMode", default: false))
+    @SharedReader(.configuration("features.betaMode"))
     var betaMode = false
     
     var body: some View {

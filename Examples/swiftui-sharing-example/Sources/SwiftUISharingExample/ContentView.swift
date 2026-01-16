@@ -12,25 +12,25 @@ struct ContentView: View {
     
     // Use @SharedReader with ConfigurationKey for reactive configuration values
     // These automatically update whenever the configuration changes
-    @SharedReader(.configuration("appName", default: "Loading...")) 
+    @SharedReader(.configuration("appName"))
     var appName = "Loading..."
     
-    @SharedReader(.configuration("features.betaMode", default: false))
+    @SharedReader(.configuration("features.betaMode"))
     var betaMode = false
     
-    @SharedReader(.configuration("features.newUI", default: false))
+    @SharedReader(.configuration("features.newUI"))
     var newUIEnabled = false
     
-    @SharedReader(.configuration("features.darkMode", default: false))
+    @SharedReader(.configuration("features.darkMode"))
     var darkModeEnabled = false
     
-    @SharedReader(.configuration("apiEndpoint", default: "https://default.example.com"))
+    @SharedReader(.configuration("apiEndpoint"))
     var apiEndpoint = "https://default.example.com"
     
-    @SharedReader(.configuration("timeout", default: 30))
+    @SharedReader(.configuration("timeout"))
     var timeout = 30
     
-    @SharedReader(.configuration("maxRetries", default: 3))
+    @SharedReader(.configuration("maxRetries"))
     var maxRetries = 3
     
     var body: some View {

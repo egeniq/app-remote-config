@@ -22,14 +22,14 @@ ConfigurationSharing provides a `ConfigurationKey` that conforms to Swift Sharin
 import ConfigurationSharing
 import Sharing
 
-// Use with a default value
-@SharedReader(.configuration("apiEndpoint", default: "https://api.example.com"))
+// Use with a default value from the property initializer
+@SharedReader(.configuration("apiEndpoint"))
 var apiEndpoint = "https://api.example.com"
 
-@SharedReader(.configuration("timeout", default: 30))
+@SharedReader(.configuration("timeout"))
 var timeout = 30
 
-@SharedReader(.configuration("features.betaMode", default: false))
+@SharedReader(.configuration("features.betaMode"))
 var betaMode = false
 ```
 
@@ -42,7 +42,7 @@ import Sharing
 
 let provider = AppRemoteConfigProvider<JSONSnapshot>(/* ... */)
 
-@SharedReader(.configuration("features.newUI", default: false, provider: provider))
+@SharedReader(.configuration("features.newUI", provider: provider))
 var newUI = false
 ```
 
@@ -73,7 +73,7 @@ struct MyApp: App {
 Then use `@SharedReader` without specifying a provider:
 
 ```swift
-@SharedReader(.configuration("features.darkMode", default: false))
+@SharedReader(.configuration("features.darkMode"))
 var darkMode = false
 ```
 
@@ -83,7 +83,7 @@ The `ConfigurationKey` automatically subscribes to changes in the underlying con
 
 ```swift
 struct SettingsView: View {
-    @SharedReader(.configuration("features.betaMode", default: false))
+    @SharedReader(.configuration("features.betaMode"))
     var betaMode = false
     
     var body: some View {
