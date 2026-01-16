@@ -98,7 +98,7 @@ public final class AppRemoteConfigService: Sendable {
 #endif
         platformVersion = ProcessInfo().operatingSystemVersion
         
-        let appVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        let appVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         appVersion = try! Version(appVersionString)
 #if DEBUG
         buildVariant = .debug
