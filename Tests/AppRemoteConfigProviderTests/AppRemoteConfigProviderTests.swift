@@ -66,17 +66,6 @@ struct AppRemoteConfigProviderTests {
     // MARK: - Basic Provider Tests
     
     @Test
-    func providerInitializationWithoutContext() async throws {
-        let configUrl = try createTestConfigFile()
-        defer { try? FileManager.default.removeItem(at: configUrl) }
-        
-        let _ = try await AppRemoteConfigProvider<JSONSnapshot>(
-            url: configUrl,
-            pollInterval: .seconds(60)
-        )
-    }
-    
-    @Test
     func providerInitializationWithContext() async throws {
         let configUrl = try createTestConfigFile()
         defer { try? FileManager.default.removeItem(at: configUrl) }
@@ -96,8 +85,6 @@ struct AppRemoteConfigProviderTests {
             resolutionContext: context
         )
     }
-    
-    // MARK: - Value Resolution Tests
     
     @Test
     func valueResolutionWithContext() async throws {
@@ -120,9 +107,8 @@ struct AppRemoteConfigProviderTests {
         )
         
         // Verify context was set
-        #expect(provider.getResolutionContext() != nil)
-        #expect(provider.getResolutionContext()?.platform == .iOS)
-        #expect(provider.getResolutionContext()?.buildVariant == .release)
+        #expect(provider.getResolutionContext().platform == .iOS)
+        #expect(provider.getResolutionContext().buildVariant == .release)
     }
     
     @Test
@@ -231,9 +217,19 @@ struct AppRemoteConfigProviderTests {
         let configUrl = tempDir.appendingPathComponent("signed-config-\(UUID().uuidString).json")
         try signedData.write(to: configUrl)
         
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
         // Create provider with public key
         let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
             url: configUrl,
+            resolutionContext: context,
             publicKey: privateKey.publicKey
         )
         
@@ -278,10 +274,20 @@ struct AppRemoteConfigProviderTests {
         // Try to verify with a different public key
         let otherPrivateKey = Curve25519.Signing.PrivateKey()
         
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
         // Should throw an error during initialization
         await #expect(throws: ConfigError.invalidSignature) {
             try await AppRemoteConfigProvider<JSONSnapshot>(
                 url: configUrl,
+                resolutionContext: context,
                 publicKey: otherPrivateKey.publicKey
             )
         }

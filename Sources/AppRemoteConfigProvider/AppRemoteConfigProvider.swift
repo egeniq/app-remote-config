@@ -184,7 +184,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     public let providerName: String
 
     /// Resolution context for configuration. These values are used to resolve overrides and conditions.
-    private let resolutionContext: Mutex<ResolutionContext?>
+    private let resolutionContext: Mutex<ResolutionContext>
     
     /// Optional public key for verifying signed configurations.
     private let publicKey: Curve25519.Signing.PublicKey?
@@ -227,7 +227,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         url: URL,
         pollInterval: Duration? = .seconds(3600),
         minimumRefreshInterval: Duration = .seconds(300),
-        resolutionContext: ResolutionContext? = nil,
+        resolutionContext: ResolutionContext,
         publicKey: Curve25519.Signing.PublicKey? = nil,
         logger: Logger = Logger(label: "AppRemoteConfigProvider"),
         metrics: any MetricsFactory = MetricsSystem.factory
@@ -333,7 +333,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     ///   - snapshotType: The type of snapshot to create from the file contents.
     ///   - parsingOptions: Options used by the snapshot to parse the file data.
     ///   - config: A configuration reader that contains the required configuration keys.
-    ///   - resolutionContext: An optional context for resolving configuration based on platform, version, variant, language.
+    ///   - resolutionContext: The context for resolving configuration based on platform, version, variant, language.
     ///   - publicKey: Optional Curve25519 public key for verifying signed configurations. If provided via config reader, this parameter takes precedence.
     ///   - logger: The logger instance to use for this provider.
     ///   - metrics: The metrics factory to use for monitoring provider performance.
@@ -342,7 +342,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         snapshotType: Snapshot.Type = Snapshot.self,
         parsingOptions: Snapshot.ParsingOptions = .default,
         config: ConfigReader,
-        resolutionContext: ResolutionContext? = nil,
+        resolutionContext: ResolutionContext,
         publicKey: Curve25519.Signing.PublicKey? = nil,
         logger: Logger = Logger(label: "AppRemoteConfigProvider"),
         metrics: any MetricsFactory = MetricsSystem.factory
@@ -589,7 +589,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     }
     
     /// Gets the current resolution context.
-    public func getResolutionContext() -> ResolutionContext? {
+    public func getResolutionContext() -> ResolutionContext {
         resolutionContext.withLock { $0 }
     }
     
@@ -764,27 +764,20 @@ extension AppRemoteConfigProvider: ConfigProvider {
     public func value(forKey key: AbsoluteConfigKey, type: ConfigType) throws -> LookupResult {
         let keyString = key.description
         
-        // If we have a resolution context, use resolved settings directly
-        if let context = getResolutionContext() {
-            let settings = try resolveOnce(
-                platform: context.platform,
-                platformVersion: context.platformVersion,
-                appVersion: context.appVersion,
-                variant: context.variant,
-                buildVariant: context.buildVariant,
-                language: context.language
-            )
-            
-            let value = extractValue(from: settings, keyPath: keyString)
-            let configValue = value.map { sendableToConfigValue($0) }
-            return LookupResult(encodedKey: keyString, value: configValue)
-        }
+        // Use resolution context to get resolved settings directly
+        let context = getResolutionContext()
+        let settings = try resolveOnce(
+            platform: context.platform,
+            platformVersion: context.platformVersion,
+            appVersion: context.appVersion,
+            variant: context.variant,
+            buildVariant: context.buildVariant,
+            language: context.language
+        )
         
-        // Without resolution context, access snapshot with "settings." prefix
-        let prefixedKey = AbsoluteConfigKey(stringLiteral: "settings.\(keyString)")
-        return try storage.withLock { storage in
-            try storage.snapshot.value(forKey: prefixedKey, type: type)
-        }
+        let value = extractValue(from: settings, keyPath: keyString)
+        let configValue = value.map { sendableToConfigValue($0) }
+        return LookupResult(encodedKey: keyString, value: configValue)
     }
     
     /// Converts a Sendable value to ConfigValue
@@ -832,15 +825,8 @@ extension AppRemoteConfigProvider: ConfigProvider {
     ) async throws -> Return where Return : ~Copyable {
         let keyString = key.description
         
-        // Determine which key to use for watching based on resolution context
-        let watchKey: AbsoluteConfigKey
-        if getResolutionContext() != nil {
-            // Use original key for resolved values
-            watchKey = key
-        } else {
-            // Use prefixed key for snapshot access
-            watchKey = AbsoluteConfigKey(stringLiteral: "settings.\(keyString)")
-        }
+        // Use original key for resolved values (always have resolution context now)
+        let watchKey = key
         
         let (stream, continuation) = AsyncStream<Result<LookupResult, any Error>>
             .makeStream(bufferingPolicy: .bufferingNewest(1))
