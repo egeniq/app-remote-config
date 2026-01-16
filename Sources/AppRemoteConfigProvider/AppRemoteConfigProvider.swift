@@ -131,8 +131,22 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         /// Active watchers for configuration snapshots.
         var snapshotWatchers: [UUID: AsyncStream<Snapshot>.Continuation]
 
-        /// Cache of last-known-good resolved values per key.
-        var valueCache: [String: Sendable] = [:]
+        /// Cache of resolved settings keyed by resolution context hash.
+        /// Stores [String: Sendable] to avoid re-resolution on every access.
+        var resolvedSettingsCache: [String: [String: Sendable]] = [:]
+
+        /// The last resolution context used for caching.
+        var lastResolutionContext: (
+            platform: Platform,
+            platformVersion: OperatingSystemVersion,
+            appVersion: Version,
+            variant: String?,
+            buildVariant: BuildVariant,
+            language: String?
+        )? = nil
+
+        /// The next date at which resolution should be re-evaluated.
+        var nextResolutionDate: Date? = nil
 
         /// Scheduled timers for resolution date changes, keyed by UUID.
         var scheduledTimers: [UUID: Task<Void, Never>] = [:]
@@ -316,62 +330,123 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         resolutionContext.withLock { $0 }
     }
     
-    /// Resolves configuration values using the stored resolution context.
+    /// Creates a hash key for the resolution context to cache resolved settings.
+    private func contextCacheKey(
+        platform: Platform,
+        platformVersion: OperatingSystemVersion,
+        appVersion: Version,
+        variant: String?,
+        buildVariant: BuildVariant,
+        language: String?
+    ) -> String {
+        "\(platform)_\(platformVersion.majorVersion).\(platformVersion.minorVersion).\(platformVersion.patchVersion)_\(appVersion)_\(variant ?? "nil")_\(buildVariant)_\(language ?? "nil")"
+    }
+    
+    /// Compare two OperatingSystemVersions for equality.
+    private func versionsEqual(_ lhs: OperatingSystemVersion, _ rhs: OperatingSystemVersion) -> Bool {
+        lhs.majorVersion == rhs.majorVersion &&
+        lhs.minorVersion == rhs.minorVersion &&
+        lhs.patchVersion == rhs.patchVersion
+    }
+    
+    /// Resolves configuration values once and caches them.
     ///
-    /// This method parses the raw config data into a Config object and resolves it
-    /// using the resolution context (platform, appVersion, buildVariant, etc.).
-    /// If no context is available, returns the raw snapshot value.
+    /// This method:
+    /// 1. Checks if we've already resolved with the same context
+    /// 2. If context hasn't changed and no scheduled resolution date has passed, returns cached values
+    /// 3. If context changed or scheduled resolution date passed, re-resolves using raw data
+    /// 4. Updates scheduled timers based on `relevantResolutionDates`
     ///
     /// - Parameters:
-    ///   - key: The configuration key to resolve
-    ///   - type: The expected type of the value
-    ///   - rawData: The raw configuration data
-    /// - Returns: The resolved value, or the snapshot value if no context is set
-    private func resolveValue(forKey key: AbsoluteConfigKey, type: ConfigType, rawData: Data) throws -> LookupResult {
-        // If no resolution context, just return snapshot value
-        guard let context = getResolutionContext() else {
-            return try storage.withLock { storage in
-                try storage.snapshot.value(forKey: key, type: type)
-            }
-        }
-        
-        // Parse the raw data into JSON
-        guard let json = try JSONSerialization.jsonObject(with: rawData, options: []) as? [String: Sendable] else {
-            // Fall back to snapshot value if parsing fails
-            return try storage.withLock { storage in
-                try storage.snapshot.value(forKey: key, type: type)
-            }
-        }
-        
-        // Create Config and resolve it
-        let config = try Config(json: json)
-        let now = Date()
-        let resolvedSettings = config.resolve(
-            date: now,
-            platform: context.platform,
-            platformVersion: context.platformVersion,
-            appVersion: context.appVersion,
-            buildVariant: context.buildVariant
-        )
-        
-        // Extract the value from resolved settings using the key path
-        let keyPath = key.description
-        if let value = extractValue(from: resolvedSettings, keyPath: keyPath) {
-            // Update cache with resolved value for potential fallback
-            storage.withLock { storage in
-                storage.valueCache[keyPath] = value
+    ///   - platform: The platform context
+    ///   - platformVersion: The platform version context
+    ///   - appVersion: The app version context
+    ///   - variant: The variant context (optional)
+    ///   - buildVariant: The build variant context
+    ///   - language: The language context (optional)
+    /// - Returns: Resolved settings dictionary, or raw settings if no context available
+    private func resolveOnce(
+        platform: Platform,
+        platformVersion: OperatingSystemVersion,
+        appVersion: Version,
+        variant: String?,
+        buildVariant: BuildVariant,
+        language: String?
+    ) throws -> [String: Sendable] {
+        return try storage.withLock { storage in
+            let cacheKey = contextCacheKey(
+                platform: platform,
+                platformVersion: platformVersion,
+                appVersion: appVersion,
+                variant: variant,
+                buildVariant: buildVariant,
+                language: language
+            )
+            let now = Date()
+            
+            // Check if context hasn't changed and no scheduled resolution date has passed
+            let contextUnchanged = storage.lastResolutionContext.map { ctx in
+                ctx.platform == platform &&
+                versionsEqual(ctx.platformVersion, platformVersion) &&
+                ctx.appVersion == appVersion &&
+                ctx.variant == variant &&
+                ctx.buildVariant == buildVariant &&
+                ctx.language == language
+            } ?? false
+            
+            let noScheduledDatePassed = storage.nextResolutionDate.map { now < $0 } ?? true
+            
+            // If context unchanged and no scheduled date has passed, return cached values
+            if contextUnchanged && noScheduledDatePassed, let cached = storage.resolvedSettingsCache[cacheKey] {
+                return cached
             }
             
-            // Create a nested dictionary matching the key path for the snapshot to query
-            // For now, fall back to snapshot since we can't easily create a snapshot-compatible value
-            return try storage.withLock { storage in
-                try storage.snapshot.value(forKey: key, type: type)
+            // Parse the raw data into JSON
+            guard let json = try JSONSerialization.jsonObject(with: storage.rawData, options: []) as? [String: Sendable] else {
+                // Fall back to raw settings if parsing fails
+                let config = try Config(data: storage.rawData)
+                return config.settings
             }
-        }
-        
-        // Fall back to snapshot if key not found in resolved settings
-        return try storage.withLock { storage in
-            try storage.snapshot.value(forKey: key, type: type)
+            
+            // Create Config and resolve it
+            let config = try Config(json: json)
+            let resolvedSettings = config.resolve(
+                date: now,
+                platform: platform,
+                platformVersion: platformVersion,
+                appVersion: appVersion,
+                variant: variant,
+                buildVariant: buildVariant,
+                language: language
+            )
+            
+            // Cache the resolved settings
+            storage.resolvedSettingsCache[cacheKey] = resolvedSettings
+            
+            // Update resolution context tracking
+            storage.lastResolutionContext = (
+                platform: platform,
+                platformVersion: platformVersion,
+                appVersion: appVersion,
+                variant: variant,
+                buildVariant: buildVariant,
+                language: language
+            )
+            
+            // Calculate next resolution date based on scheduled changes
+            let relevantDates = config.relevantResolutionDates(
+                platform: platform,
+                platformVersion: platformVersion,
+                appVersion: appVersion,
+                variant: variant,
+                buildVariant: buildVariant,
+                language: language
+            )
+            
+            // Find the next date after now
+            storage.nextResolutionDate = relevantDates.first { $0 > now }
+            
+            return resolvedSettings
         }
     }
     
@@ -466,7 +541,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                     }
 
                     // Update storage with new data
-                    let oldRawData = storage.rawData
                     storage.snapshot = newSnapshot
                     storage.rawData = data
                     storage.lastModifiedTimestamp = candidateTimestamp
@@ -495,24 +569,10 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                         )? in
                         guard !watchers.isEmpty else { return nil }
 
-                        // Get old and new values for this key
-                        let oldValue = Result { try self.resolveValue(forKey: key, type: .string, rawData: oldRawData) }
-                        let newValue = Result { try self.resolveValue(forKey: key, type: .string, rawData: data) }
+                        // Get new values using the new snapshot
+                        let newValue = Result { try newSnapshot.value(forKey: key, type: .string) }
 
-                        let didChange =
-                            switch (oldValue, newValue) {
-                            case (.success(let lhs), .success(let rhs)):
-                                lhs != rhs
-                            case (.failure, .failure):
-                                false
-                            default:
-                                true
-                            }
-
-                        // Only notify if the value changed
-                        guard didChange else {
-                            return nil
-                        }
+                        // Only notify watchers of new value
                         return (key, newValue, Array(watchers.values))
                     }
 
@@ -579,26 +639,26 @@ extension AppRemoteConfigProvider: ConfigProvider {
     /// This method:
     /// 1. Uses the stored resolution context (platform, version, variant, etc.)
     /// 2. Resolves the AppRemoteConfig using conditions and schedules
-    /// 3. Extracts the value at the nested key path (e.g., "settings.feature.enabled")
-    /// 4. Falls back to cached value if key is missing, then to nil
+    /// 3. Returns the resolved value or nil if no context
     ///
     /// - Parameters:
     ///   - keyPath: A dot-separated key path (e.g., "settings.feature.enabled")
-    ///   - snapshot: The snapshot to resolve (optional, uses current snapshot if not provided)
     /// - Returns: The resolved value or nil if not found
-    private func resolveNestedValue(_ keyPath: String, snapshot: Snapshot? = nil) -> Sendable? {
-        _ = snapshot // Use snapshot parameter if provided (for future extension)
-        
-        // If no resolution context is set, just return cached value
-        guard getResolutionContext() != nil else {
-            logger.debug("No context available for resolution, returning cached or nil value")
-            return storage.withLock { $0.valueCache[keyPath] }
+    private func resolveNestedValue(_ keyPath: String) throws -> Sendable? {
+        guard let context = getResolutionContext() else {
+            return nil
         }
         
-        // For now, just return the cached value or nil
-        // The actual resolution logic would require being able to extract config from the snapshot
-        // and the snapshot types (JSONSnapshot, YAMLSnapshot) don't expose raw dictionary data
-        return storage.withLock { $0.valueCache[keyPath] }
+        let settings = try resolveOnce(
+            platform: context.platform,
+            platformVersion: context.platformVersion,
+            appVersion: context.appVersion,
+            variant: context.variant,
+            buildVariant: context.buildVariant,
+            language: context.language
+        )
+        
+        return extractValue(from: settings, keyPath: keyPath)
     }
     
     public func value(forKey key: AbsoluteConfigKey, type: ConfigType) throws -> LookupResult {
