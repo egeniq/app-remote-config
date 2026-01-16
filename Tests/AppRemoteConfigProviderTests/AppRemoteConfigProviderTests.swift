@@ -65,6 +65,7 @@ struct AppRemoteConfigProviderTests {
     
     // MARK: - Basic Provider Tests
     
+    /// Verifies that the provider can be initialized with a resolution context.
     @Test
     func providerInitializationWithContext() async throws {
         let configUrl = try createTestConfigFile()
@@ -86,6 +87,7 @@ struct AppRemoteConfigProviderTests {
         )
     }
     
+    /// Tests that the resolution context is properly stored and can be retrieved.
     @Test
     func valueResolutionWithContext() async throws {
         let configUrl = try createTestConfigFile()
@@ -111,6 +113,7 @@ struct AppRemoteConfigProviderTests {
         #expect(provider.getResolutionContext().buildVariant == .release)
     }
     
+    /// Tests that nested dictionary values can be accessed using dot-separated key paths.
     @Test
     func nestedKeyPathResolution() async throws {
         let configUrl = try createTestConfigFile()
@@ -131,9 +134,6 @@ struct AppRemoteConfigProviderTests {
             resolutionContext: context
         )
         
-        try await Task.sleep(for: .milliseconds(200))
-        
-        // Use ConfigReader to read values
         let reader = ConfigReader(provider: provider)
         
         // Verify nested key path resolution works correctly
@@ -152,6 +152,7 @@ struct AppRemoteConfigProviderTests {
     
     // MARK: - ConfigReader Integration Tests
     
+    /// Tests basic ConfigReader integration with the provider.
     @Test
     func configReaderIntegration() async throws {
         let configUrl = try createTestConfigFile()
@@ -174,8 +175,6 @@ struct AppRemoteConfigProviderTests {
         
         let reader = ConfigReader(provider: provider)
         
-//        try await Task.sleep(for: .milliseconds(200))
-        
         let featureEnabled = reader.bool(forKey: "features.newUI", default: true)
         #expect(featureEnabled == true)
         
@@ -188,6 +187,8 @@ struct AppRemoteConfigProviderTests {
     
     // MARK: - Value Type Tests
     
+    /// Tests all supported value types with unsigned (non-cryptographically-signed) configs.
+    /// Verifies bool, int, double, string, arrays, and nested dictionaries.
     @Test
     func allValueTypesUnsigned() async throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -252,6 +253,8 @@ struct AppRemoteConfigProviderTests {
         #expect(reader.int(forKey: "dictionary.three", default: 0) == 3)
     }
     
+    /// Tests all supported value types with cryptographically-signed configs.
+    /// Ensures type handling works correctly after signature verification and data unwrapping.
     @Test
     func allValueTypesSigned() async throws {
         let privateKey = Curve25519.Signing.PrivateKey()
@@ -327,6 +330,7 @@ struct AppRemoteConfigProviderTests {
         #expect(reader.int(forKey: "dictionary.three", default: 0) == 3)
     }
     
+    /// Tests boolean edge cases, particularly handling of NSNumber representation in JSON.
     @Test
     func booleanEdgeCases() async throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -369,6 +373,7 @@ struct AppRemoteConfigProviderTests {
         #expect(boolArray == [true, false, true, false])
     }
     
+    /// Tests that type mismatches return default values rather than crashing or coercing incorrectly.
     @Test
     func typeCoercionFallback() async throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -419,6 +424,7 @@ struct AppRemoteConfigProviderTests {
     
     // MARK: - Signed Config Tests
     
+    /// Tests that signed configs can be verified and values can be accessed correctly.
     @Test
     func signedConfigVerification() async throws {
         // Create a private key for signing
@@ -475,6 +481,7 @@ struct AppRemoteConfigProviderTests {
         #expect(apiKey == "secret-key-123")
     }
     
+    /// Tests that configs signed with one key cannot be verified with a different public key.
     @Test
     func signedConfigWithInvalidSignature() async throws {
         // Create a private key for signing
@@ -502,6 +509,7 @@ struct AppRemoteConfigProviderTests {
         let tempDir = FileManager.default.temporaryDirectory
         let configUrl = tempDir.appendingPathComponent("invalid-signed-config-\(UUID().uuidString).json")
         try signedData.write(to: configUrl)
+        defer { try? FileManager.default.removeItem(at: configUrl) }
         
         // Try to verify with a different public key
         let otherPrivateKey = Curve25519.Signing.PrivateKey()
@@ -523,5 +531,102 @@ struct AppRemoteConfigProviderTests {
                 publicKey: otherPrivateKey.publicKey
             )
         }
+    }
+    
+    // MARK: - Context and Resolution Tests
+    
+    /// Tests that resolution context can be updated after provider initialization.
+    @Test
+    func contextUpdateAndRefresh() async throws {
+        let configUrl = try createTestConfigFile()
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let initialContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            resolutionContext: initialContext
+        )
+        
+        // Verify initial context
+        #expect(provider.getResolutionContext().buildVariant == .release)
+        #expect(provider.getResolutionContext().platform == .iOS)
+        
+        // Update context
+        let newContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .macOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 14, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("2.0.0"),
+            variant: "pro",
+            buildVariant: .debug,
+            language: "fr"
+        )
+        
+        provider.setResolutionContext(newContext)
+        
+        // Verify context was updated
+        let updatedContext = provider.getResolutionContext()
+        #expect(updatedContext.buildVariant == .debug)
+        #expect(updatedContext.platform == .macOS)
+        #expect(updatedContext.variant == "pro")
+        #expect(updatedContext.language == "fr")
+    }
+    
+    /// Tests the snapshot() method returns current config snapshot.
+    @Test
+    func snapshotRetrieval() async throws {
+        let configUrl = try createTestConfigFile()
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            resolutionContext: context
+        )
+        
+        let snapshot = provider.snapshot()
+        #expect(snapshot is JSONSnapshot)
+    }
+    
+    /// Tests that fetchValue triggers a refresh if needed before returning value.
+    @Test
+    func fetchValueWithRefresh() async throws {
+        let configUrl = try createTestConfigFile()
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            resolutionContext: context
+        )
+        
+        // Use fetchValue instead of value
+        let key = Configuration.AbsoluteConfigKey("apiEndpoint")
+        let result = try await provider.fetchValue(forKey: key, type: .string)
+        
+        #expect(result.value != nil)
     }
 }
