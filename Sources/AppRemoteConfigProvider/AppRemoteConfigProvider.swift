@@ -46,15 +46,6 @@ public import Configuration
 /// let featureEnabled = reader.bool(forKey: "features.newUI", default: false)
 /// ```
 ///
-/// ## Key Path Format
-///
-/// Configuration keys use dot-separated nested paths. The provider automatically
-/// accesses values within the config's `settings` dictionary, so you don't need to
-/// prefix keys with "settings.":
-/// - `"feature.enabled"` maps to `config.settings["feature"]["enabled"]`
-/// - Intermediate keys must be dictionaries for the path to resolve
-/// - Missing intermediate keys return nil, falling back to cached values
-///
 /// ## Usage
 ///
 /// Create a remote config provider by specifying the snapshot type and URL:
@@ -109,8 +100,7 @@ public import Configuration
 ///
 /// This expects a `url` key in the configuration that specifies the URL to the file.
 /// For a full list of configuration keys, check out ``RemoteFileProvider/init(snapshotType:parsingOptions:config:)``.
-/// 
-//@available(AppRemoteConfigProvider 1.0, *)
+///
 public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendable {
 
     /// The internal storage structure for the provider state.
@@ -584,11 +574,19 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     // MARK: - Resolution Context Methods
     
     /// Sets the resolution context for config resolution.
+    ///
+    /// Use this to update the platform, app version, build variant, or other contextual
+    /// information that affects which configuration overrides are applied. The next time
+    /// values are accessed, they will be resolved using the new context.
+    ///
+    /// - Parameter context: The new resolution context to use for config resolution.
     public func setResolutionContext(_ context: ResolutionContext) {
         resolutionContext.withLock { $0 = context }
     }
     
     /// Gets the current resolution context.
+    ///
+    /// - Returns: The currently active resolution context used for config resolution.
     public func getResolutionContext() -> ResolutionContext {
         resolutionContext.withLock { $0 }
     }
@@ -664,13 +662,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 return cached
             }
             
-            // Create Config from raw data, verifying signature if public key is provided
+            // Create Config from raw data
             let config = try Config(data: storage.rawData)
-//            if let publicKey {
-//                config = try Config(data: storage.rawData, publicKey: publicKey)
-//            } else {
-//                config = try Config(data: storage.rawData)
-//            }
             let resolvedSettings = config.resolve(
                 date: now,
                 platform: platform,
@@ -734,7 +727,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     }
 }
 
-//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: CustomStringConvertible {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public var description: String {
@@ -742,7 +734,6 @@ extension AppRemoteConfigProvider: CustomStringConvertible {
     }
 }
 
-//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: CustomDebugStringConvertible {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public var debugDescription: String {
@@ -750,10 +741,19 @@ extension AppRemoteConfigProvider: CustomDebugStringConvertible {
     }
 }
 
-//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: ConfigProvider {
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     
+    /// Retrieves a configuration value for the specified key.
+    ///
+    /// This method uses the current resolution context to resolve config overrides and
+    /// extract the value at the specified key path. It performs type-directed casting
+    /// based on the requested ConfigType.
+    ///
+    /// - Parameters:
+    ///   - key: The absolute configuration key path (dot-separated for nested values)
+    ///   - type: The expected type of the configuration value
+    /// - Returns: A LookupResult containing the value if found and type-compatible, nil otherwise
+    /// - Throws: Configuration resolution errors
     public func value(forKey key: AbsoluteConfigKey, type: ConfigType) throws -> LookupResult {
         let keyString = key.description
         
@@ -831,7 +831,16 @@ extension AppRemoteConfigProvider: ConfigProvider {
         return LookupResult(encodedKey: keyString, value: configValue)
     }
 
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+    /// Fetches a configuration value after first refreshing the configuration if needed.
+    ///
+    /// This async variant of `value(forKey:type:)` ensures the configuration is up-to-date
+    /// before returning the value by calling `refreshIfNeeded()` first.
+    ///
+    /// - Parameters:
+    ///   - key: The absolute configuration key path
+    ///   - type: The expected type of the configuration value
+    /// - Returns: A LookupResult containing the value if found
+    /// - Throws: Network errors, configuration resolution errors
     public func fetchValue(
         forKey key: AbsoluteConfigKey,
         type: ConfigType
@@ -840,6 +849,17 @@ extension AppRemoteConfigProvider: ConfigProvider {
         return try value(forKey: key, type: type)
     }
 
+    /// Watches a configuration value for changes over time.
+    ///
+    /// Creates a stream that yields the initial value and subsequently yields whenever
+    /// the configuration file changes. The stream remains active until the handler returns.
+    ///
+    /// - Parameters:
+    ///   - key: The absolute configuration key path to watch
+    ///   - type: The expected type of the configuration value
+    ///   - updatesHandler: Handler that receives the async sequence of value updates
+    /// - Returns: The value returned by the updates handler
+    /// - Throws: Configuration resolution errors or errors thrown by the handler
     public func watchValue<Return>(
         forKey key: Configuration.AbsoluteConfigKey,
         type: Configuration.ConfigType,
@@ -874,11 +894,22 @@ extension AppRemoteConfigProvider: ConfigProvider {
         return try await updatesHandler(.init(stream))
     }
 
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+    /// Returns the current configuration snapshot.
+    ///
+    /// - Returns: The current immutable configuration snapshot
     public func snapshot() -> any ConfigSnapshot {
         storage.withLock { $0.snapshot }
     }
 
+    /// Watches the configuration snapshot for changes over time.
+    ///
+    /// Creates a stream that yields the initial snapshot and subsequently yields whenever
+    /// the configuration file changes. Useful for observing all configuration changes
+    /// rather than individual values.
+    ///
+    /// - Parameter updatesHandler: Handler that receives the async sequence of snapshots
+    /// - Returns: The value returned by the updates handler
+    /// - Throws: Errors thrown by the handler
     public func watchSnapshot<Return>(updatesHandler: nonisolated(nonsending) (Configuration.ConfigUpdatesAsyncSequence<any Configuration.ConfigSnapshot, Never>) async throws -> Return) async throws -> Return where Return : ~Copyable {
         let (stream, continuation) = AsyncStream<Snapshot>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let id = UUID()
@@ -903,9 +934,16 @@ extension AppRemoteConfigProvider: ConfigProvider {
     }
 }
 
-//@available(AppRemoteConfigProvider 1.0, *)
 extension AppRemoteConfigProvider: Service {
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
+    
+    /// Runs the service's main polling loop.
+    ///
+    /// This method implements the `Service` protocol and should be run within a `ServiceGroup`.
+    /// It polls the configuration URL at the specified `pollInterval`, checking for changes
+    /// and notifying watchers when updates are detected. If `pollInterval` is nil, polling
+    /// is disabled and the service waits indefinitely for graceful shutdown.
+    ///
+    /// - Throws: Network errors or configuration parsing errors during polling
     public func run() async throws {
         // If polling is disabled, just wait for graceful shutdown
         guard let pollInterval = pollInterval else {

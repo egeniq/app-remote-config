@@ -1,19 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This source file is part of the SwiftConfiguration open source project
-//
-// Copyright (c) 2025 Apple Inc. and the SwiftConfiguration project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of SwiftConfiguration project authors
-//
-// SPDX-License-Identifier: Apache-2.0
-//
-//===----------------------------------------------------------------------===//
-
-//#if ReloadingSupport
-
 #if canImport(FoundationEssentials)
 import FoundationEssentials
 #else
@@ -80,5 +64,3 @@ internal struct AppRemoteConfigProviderMetrics {
         self.watcherCount = Gauge(label: "\(prefix)_watchers_active", factory: factory)
     }
 }
-
-//#endif
