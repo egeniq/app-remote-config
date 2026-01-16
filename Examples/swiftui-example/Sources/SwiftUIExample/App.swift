@@ -130,15 +130,18 @@ struct SwiftUIExampleApp: App {
     /// Create an example configuration JSON file
     private func createExampleConfigFile() throws -> URL {
         let exampleConfig: [String: Any] = [
-            "appName": "Remote Config Example App",
-            "features": [
-                "betaMode": true,
-                "newUI": true,
-                "darkMode": true
+            "settings": [
+                "appName": "Remote Config Example App",
+                "features": [
+                    "betaMode": true,
+                    "newUI": true,
+                    "darkMode": true
+                ],
+                "apiEndpoint": "https://api.example.com/v1",
+                "timeout": 30,
+                "maxRetries": 3
             ],
-            "apiEndpoint": "https://api.example.com/v1",
-            "timeout": 30,
-            "maxRetries": 3
+            "overrides": []
         ]
         
         let jsonData = try JSONSerialization.data(

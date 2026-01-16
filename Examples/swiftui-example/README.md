@@ -96,15 +96,18 @@ let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
 The example uses this JSON structure:
 ```json
 {
-  "appName": "My App",
-  "features": {
-    "betaMode": true,
-    "newUI": true,
-    "darkMode": true
+    "settings": {
+        "appName": "My App",
+        "features": {
+            "betaMode": true,
+            "newUI": true,
+            "darkMode": true
+        },
+        "apiEndpoint": "https://api.example.com",
+        "timeout": 30,
+        "maxRetries": 3
   },
-  "apiEndpoint": "https://api.example.com",
-  "timeout": 30,
-  "maxRetries": 3
+    "overrides": []
 }
 ```
 
