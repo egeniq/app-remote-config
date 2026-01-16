@@ -129,19 +129,33 @@ struct SwiftUIExampleApp: App {
     
     /// Create an example configuration JSON file
     private func createExampleConfigFile() throws -> URL {
+        let scheduledStart = ISO8601DateFormatter().string(from: Date().addingTimeInterval(3))
         let exampleConfig: [String: Any] = [
             "settings": [
                 "appName": "Remote Config Example App",
                 "features": [
                     "betaMode": true,
-                    "newUI": true,
+                    "newUI": false,
                     "darkMode": true
                 ],
                 "apiEndpoint": "https://api.example.com/v1",
                 "timeout": 30,
                 "maxRetries": 3
             ],
-            "overrides": []
+            "overrides": [
+                [
+                    "schedule": [
+                        "from": scheduledStart
+                    ],
+                    "settings": [
+                        "features": [
+                            "betaMode": true,
+                            "newUI": true,
+                            "darkMode": true
+                        ]
+                    ]
+                ]
+            ]
         ]
         
         let jsonData = try JSONSerialization.data(

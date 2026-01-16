@@ -100,14 +100,25 @@ The example uses this JSON structure:
         "appName": "My App",
         "features": {
             "betaMode": true,
-            "newUI": true,
+            "newUI": false,
             "darkMode": true
         },
         "apiEndpoint": "https://api.example.com",
         "timeout": 30,
         "maxRetries": 3
   },
-    "overrides": []
+    "overrides": [
+        {
+            "schedule": {
+                "from": "<ISO8601 timestamp 15s from file creation>"
+            },
+            "settings": {
+                "features": {
+                    "newUI": true
+                }
+            }
+        }
+    ]
 }
 ```
 

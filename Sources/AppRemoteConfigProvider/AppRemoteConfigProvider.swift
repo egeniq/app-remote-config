@@ -268,21 +268,23 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                   let configData = Data(base64Encoded: encodedConfigData) else {
                 throw ConfigError.base64DecodingFailed
             }
-            let snapshot = try snapshotType.init(
-                data: configData.bytes,
+            let resolvedSnapshot = try Self.makeResolvedSnapshot(
+                from: configData,
+                context: resolutionContext,
                 providerName: providerName,
                 parsingOptions: parsingOptions
             )
             actualConfigData = configData
-            initialSnapshot = snapshot
+            initialSnapshot = resolvedSnapshot
         } else {
-            let snapshot = try snapshotType.init(
-                data: loadedData.bytes,
+            let resolvedSnapshot = try Self.makeResolvedSnapshot(
+                from: loadedData,
+                context: resolutionContext,
                 providerName: providerName,
                 parsingOptions: parsingOptions
             )
             actualConfigData = loadedData
-            initialSnapshot = snapshot
+            initialSnapshot = resolvedSnapshot
         }
 
         // Initialize storage with the actual config data (unwrapped if signed)
@@ -464,21 +466,13 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                   let configData = Data(base64Encoded: encodedConfigData) else {
                 throw ConfigError.base64DecodingFailed
             }
-            let snapshot = try Snapshot.init(
-                data: configData.bytes,
-                providerName: providerName,
-                parsingOptions: parsingOptions
-            )
+            let resolvedSnapshot = try makeResolvedSnapshot(from: configData)
             actualData = configData
-            newSnapshot = snapshot
+            newSnapshot = resolvedSnapshot
         } else {
-            let snapshot = try Snapshot.init(
-                data: loadedData.bytes,
-                providerName: providerName,
-                parsingOptions: parsingOptions
-            )
+            let resolvedSnapshot = try makeResolvedSnapshot(from: loadedData)
             actualData = loadedData
-            newSnapshot = snapshot
+            newSnapshot = resolvedSnapshot
         }
 
         typealias ValueWatchers = [(
@@ -590,6 +584,150 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     public func getResolutionContext() -> ResolutionContext {
         resolutionContext.withLock { $0 }
     }
+
+    /// Creates a snapshot from resolved settings for the current context.
+    ///
+    /// This ensures the snapshot only contains flattened settings values (strings, numbers, bools),
+    /// avoiding errors when the raw config contains complex structures like overrides.
+    private func makeResolvedSnapshot(from data: Data, resolveDate: Date = Date()) throws -> Snapshot {
+        let context = getResolutionContext()
+        return try Self.makeResolvedSnapshot(
+            from: data,
+            context: context,
+            providerName: providerName,
+            parsingOptions: parsingOptions,
+            resolveDate: resolveDate
+        )
+    }
+
+    /// Builds a snapshot from resolved settings for the given context.
+    private static func makeResolvedSnapshot(
+        from data: Data,
+        context: ResolutionContext,
+        providerName: String,
+        parsingOptions: Snapshot.ParsingOptions,
+        resolveDate: Date = Date()
+    ) throws -> Snapshot {
+        let resolvedSettings = try Config(data: data).resolve(
+            date: resolveDate,
+            platform: context.platform,
+            platformVersion: context.platformVersion,
+            appVersion: context.appVersion,
+            variant: context.variant,
+            buildVariant: context.buildVariant,
+            language: context.language
+        )
+
+        let resolvedData = try JSONSerialization.data(withJSONObject: resolvedSettings, options: [])
+        return try Snapshot.init(
+            data: resolvedData.bytes,
+            providerName: providerName,
+            parsingOptions: parsingOptions
+        )
+    }
+
+    /// Schedule a timer to re-resolve at the given date.
+    private func scheduleResolutionTimer(for date: Date?) {
+        storage.withLock { storage in
+            // Cancel existing timers
+            storage.scheduledTimers.values.forEach { $0.cancel() }
+            storage.scheduledTimers.removeAll()
+            guard let date, date > Date() else {
+                storage.nextResolutionDate = nil
+                return
+            }
+            let delay = date.timeIntervalSinceNow
+            let task = Task.detached { [weak self] in
+                let nanoseconds = UInt64(max(delay, 0) * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanoseconds)
+                await self?.performScheduledResolution(at: date)
+            }
+            storage.scheduledTimers[UUID()] = task
+            storage.nextResolutionDate = date
+        }
+    }
+
+    /// Recompute resolved snapshot at a scheduled date and notify watchers.
+    private func performScheduledResolution(at date: Date) async {
+        typealias ValueWatchers = [(
+            AbsoluteConfigKey,
+            Result<LookupResult, any Error>,
+            [AsyncStream<Result<LookupResult, any Error>>.Continuation]
+        )]
+        typealias SnapshotWatchers = (Snapshot, [AsyncStream<Snapshot>.Continuation])
+
+        let context = getResolutionContext()
+        let rawDataAndWatchers: (Data, ValueWatchers, SnapshotWatchers, Date?)
+        do {
+            rawDataAndWatchers = try storage.withLock { storage in
+                // Ensure this scheduled resolution is still relevant
+                if let nextDate = storage.nextResolutionDate, nextDate > date {
+                    return (storage.rawData, [], (storage.snapshot, []), storage.nextResolutionDate)
+                }
+
+                let resolvedSnapshot = try Self.makeResolvedSnapshot(
+                    from: storage.rawData,
+                    context: context,
+                    providerName: providerName,
+                    parsingOptions: parsingOptions,
+                    resolveDate: date
+                )
+
+                // Compute next relevant date for future scheduling
+                let nextDate = (try? Config(data: storage.rawData))?
+                    .relevantResolutionDates(
+                        platform: context.platform,
+                        platformVersion: context.platformVersion,
+                        appVersion: context.appVersion,
+                        variant: context.variant,
+                        buildVariant: context.buildVariant,
+                        language: context.language
+                    ).first(where: { $0 > date })
+
+                // Prepare watcher notifications
+                let valueWatchers = storage.valueWatchers.compactMap {
+                    (key, watchers) -> (
+                        AbsoluteConfigKey,
+                        Result<LookupResult, any Error>,
+                        [AsyncStream<Result<LookupResult, any Error>>.Continuation]
+                    )? in
+                    guard !watchers.isEmpty else { return nil }
+                    let newValue = Result { try resolvedSnapshot.value(forKey: key, type: .string) }
+                    return (key, newValue, Array(watchers.values))
+                }
+                let snapshotWatchers = (resolvedSnapshot, Array(storage.snapshotWatchers.values))
+
+                // Update storage
+                storage.snapshot = resolvedSnapshot
+                storage.resolvedSettingsCache.removeAll()
+                storage.lastResolutionContext = nil
+                storage.nextResolutionDate = nextDate
+                storage.scheduledTimers.values.forEach { $0.cancel() }
+                storage.scheduledTimers.removeAll()
+                storage.lastRefreshTimestamp = date
+
+                return (storage.rawData, valueWatchers, snapshotWatchers, nextDate)
+            }
+        } catch {
+            logger.error("Failed scheduled resolution: \(error)")
+            return
+        }
+
+        let (_, valueWatchers, snapshotWatchers, nextDate) = rawDataAndWatchers
+
+        // Notify watchers outside the lock
+        for (_, valueUpdate, watchers) in valueWatchers {
+            for watcher in watchers {
+                watcher.yield(valueUpdate)
+            }
+        }
+        for watcher in snapshotWatchers.1 {
+            watcher.yield(snapshotWatchers.0)
+        }
+
+        // Schedule next resolution if needed
+        scheduleResolutionTimer(for: nextDate)
+    }
     
     /// Creates a hash key for the resolution context to cache resolved settings.
     private func contextCacheKey(
@@ -634,7 +772,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         buildVariant: BuildVariant,
         language: String?
     ) throws -> [String: Sendable] {
-        return try storage.withLock { storage in
+        let outcome: ([String: Sendable], Date?) = try storage.withLock { storage in
             let cacheKey = contextCacheKey(
                 platform: platform,
                 platformVersion: platformVersion,
@@ -659,7 +797,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             
             // If context unchanged and no scheduled date has passed, return cached values
             if contextUnchanged && noScheduledDatePassed, let cached = storage.resolvedSettingsCache[cacheKey] {
-                return cached
+                return (cached, storage.nextResolutionDate)
             }
             
             // Create Config from raw data
@@ -700,8 +838,11 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             // Find the next date after now
             storage.nextResolutionDate = relevantDates.first { $0 > now }
             
-            return resolvedSettings
+            return (resolvedSettings, storage.nextResolutionDate)
         }
+        // Schedule timer outside lock (also clears existing timer when nil)
+        scheduleResolutionTimer(for: outcome.1)
+        return outcome.0
     }
     
     /// Extracts a value from resolved settings using a dot-separated key path.
