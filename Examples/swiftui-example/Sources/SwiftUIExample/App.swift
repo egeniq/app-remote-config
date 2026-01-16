@@ -4,10 +4,6 @@ import AppRemoteConfigProvider
 import AppRemoteConfig
 import Configuration
 
-// Note: We use @testable to access internal initializers for this example
-// In production, you would use the public convenience initializer with ConfigReader
-@testable import AppRemoteConfigProvider
-
 @main
 struct SwiftUIExampleApp: App {
     @State private var viewModel: ContentViewViewModel?
@@ -36,23 +32,46 @@ struct SwiftUIExampleApp: App {
             // Step 1: Create an example configuration file
             let configFileURL = try createExampleConfigFile()
             
-            // Step 2: Create the ResolutionContext with platform and app information
+            // Step 2: Automatically detect platform
+            let platform: Platform
+            #if os(iOS)
+            platform = .iOS
+            #elseif os(macOS)
+            platform = .macOS
+            #elseif os(tvOS)
+            platform = .tvOS
+            #elseif os(watchOS)
+            platform = .watchOS
+            #else
+            platform = .iOS  // Default fallback
+            #endif
+            
+            // Step 3: Fetch OS version once
+            let osVersion = ProcessInfo.processInfo.operatingSystemVersion
+            
+            // Step 4: Read app version from Info.plist
+            let appVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+            let appVersion = try Version(appVersionString)
+            
+            // Step 5: Determine build variant from DEBUG flag
+            let buildVariant: BuildVariant
+            #if DEBUG
+            buildVariant = .debug
+            #else
+            buildVariant = .release
+            #endif
+            
+            // Step 6: Create the ResolutionContext with detected values
             let resolutionContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
-                platform: .iOS,                           // Device platform (iOS, macOS, tvOS, watchOS)
-                platformVersion: OperatingSystemVersion(  // OS version
-                    majorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
-                    minorVersion: ProcessInfo.processInfo.operatingSystemVersion.minorVersion,
-                    patchVersion: ProcessInfo.processInfo.operatingSystemVersion.patchVersion
-                ),
-                appVersion: try Version("1.0.0"),        // App version for variant selection
+                platform: platform,
+                platformVersion: osVersion,
+                appVersion: appVersion,
                 variant: nil,                             // Optional variant name for A/B testing
-                buildVariant: .debug,                     // Debug or Release build
-                language: Locale.current.language.languageCode?.identifier  // User's preferred language
+                buildVariant: buildVariant,
+                language: Locale.current.language.languageCode?.identifier
             )
             
-            // Step 3: Instantiate AppRemoteConfigProvider
-            // This initializer is marked internal but accessible via @testable in this example
-            // For production use, you would typically use the convenience init with ConfigReader
+            // Step 7: Instantiate AppRemoteConfigProvider
             let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
                 url: configFileURL,
                 pollInterval: .seconds(30),              // Poll every 30 seconds (nil to disable)
@@ -60,7 +79,7 @@ struct SwiftUIExampleApp: App {
                 resolutionContext: resolutionContext
             )
             
-            // Step 4: Create the view model with the initialized provider
+            // Step 8: Create the view model with the initialized provider
             await MainActor.run {
                 self.viewModel = ContentViewViewModel(provider: provider)
             }

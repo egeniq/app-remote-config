@@ -211,7 +211,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     /// The metrics collector for this provider instance.
     private let metrics: AppRemoteConfigProviderMetrics
 
-    internal init(
+    public init(
         snapshotType: Snapshot.Type = Snapshot.self,
         parsingOptions: Snapshot.ParsingOptions = .default,
         url: URL,

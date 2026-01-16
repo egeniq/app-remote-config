@@ -14,27 +14,50 @@ The example app shows:
 ## Key Components
 
 ### `App.swift` - Application Entry Point
-- Initializes the `AppRemoteConfigProvider` with proper `ResolutionContext`
+- Automatically detects platform using `#if os()` compiler directives
+- Reads app version from `Info.plist` (`CFBundleShortVersionString`)
+- Determines build variant from `DEBUG` flag
+- Fetches OS version once using `ProcessInfo.processInfo.operatingSystemVersion`
 - Creates and writes example configuration JSON file
 - Demonstrates async provider instantiation with error handling
-- Shows proper resolution context setup with platform, version, and language
 
 ### ResolutionContext Configuration
 
-The example shows how to populate `ResolutionContext` with:
+The example shows how to automatically populate `ResolutionContext`:
 
 ```swift
+// Automatically detect platform
+#if os(iOS)
+let platform = Platform.iOS
+#elseif os(macOS)
+let platform = Platform.macOS
+#elseif os(tvOS)
+let platform = Platform.tvOS
+#elseif os(watchOS)
+let platform = Platform.watchOS
+#endif
+
+// Fetch OS version once
+let osVersion = ProcessInfo.processInfo.operatingSystemVersion
+
+// Read app version from Info.plist
+let appVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+let appVersion = try Version(appVersionString)
+
+// Determine build variant from DEBUG flag
+#if DEBUG
+let buildVariant = BuildVariant.debug
+#else
+let buildVariant = BuildVariant.release
+#endif
+
 let resolutionContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
-    platform: .iOS,                        // Device platform
-    platformVersion: OperatingSystemVersion(
-        majorVersion: 17,                  // OS version
-        minorVersion: 0,
-        patchVersion: 0
-    ),
-    appVersion: try Version("1.0.0"),     // App version for variant selection
+    platform: platform,
+    platformVersion: osVersion,
+    appVersion: appVersion,
     variant: nil,                          // Optional variant for A/B testing
-    buildVariant: .debug,                 // Debug or Release build
-    language: Locale.current.language.languageCode?.identifier  // User language
+    buildVariant: buildVariant,
+    language: Locale.current.language.languageCode?.identifier
 )
 ```
 
@@ -99,15 +122,37 @@ open -a Xcode SwiftUIExample.xcodeproj
 
 ## Key Integration Points
 
-### 1. Provider Initialization
+### 1. Provider Initialization with Automatic Detection
 ```swift
-// Create resolution context with platform and app information
+// Automatically detect platform based on compilation target
+#if os(iOS)
+let platform = Platform.iOS
+#elseif os(macOS)
+let platform = Platform.macOS
+// ... etc
+#endif
+
+// Fetch OS version once
+let osVersion = ProcessInfo.processInfo.operatingSystemVersion
+
+// Read version from Info.plist
+let appVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+let appVersion = try Version(appVersionString)
+
+// Detect build variant from DEBUG flag
+#if DEBUG
+let buildVariant = BuildVariant.debug
+#else
+let buildVariant = BuildVariant.release
+#endif
+
+// Create resolution context with detected values
 let resolutionContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
-    platform: .iOS,
-    platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
-    appVersion: try Version("1.0.0"),
+    platform: platform,
+    platformVersion: osVersion,
+    appVersion: appVersion,
     variant: nil,
-    buildVariant: .debug,
+    buildVariant: buildVariant,
     language: Locale.current.language.languageCode?.identifier
 )
 
