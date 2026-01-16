@@ -6,6 +6,7 @@ This example demonstrates how to integrate `AppRemoteConfigProvider` into a Swif
 
 The example app shows:
 - **Provider Initialization**: Setting up `AppRemoteConfigProvider` with resolution context
+- **ServiceGroup Integration**: Running provider as a service to enable automatic polling
 - **Logging**: Using `swift-log` Logger to see provider activity in console
 - **Configuration Management**: Reading and displaying remote configuration values
 - **SwiftUI Integration**: Using `@ObservedObject` and state management to display config values
@@ -20,6 +21,7 @@ The example app shows:
 - Determines build variant from `DEBUG` flag
 - Fetches OS version once using `ProcessInfo.processInfo.operatingSystemVersion`
 - Creates a Logger instance to track provider activity
+- Sets up ServiceGroup to run the provider as a service (enables polling)
 - Demonstrates async provider instantiation with error handling
 - Logs initialization details for debugging
 
@@ -204,9 +206,45 @@ let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
 logger.info("AppRemoteConfigProvider initialized successfully")
 logger.info("Platform: \(platform), OS: \(osVersion.majorVersion).\(osVersion.minorVersion)")
 logger.info("App version: \(appVersion), Build variant: \(buildVariant)")
+
+// Create ServiceGroup to run the provider (required for polling to work)
+let serviceGroup = ServiceGroup(
+    services: [provider],
+    logger: logger
+)
+
+// Start the service group in a background task
+Task {
+    try await serviceGroup.run()
+}
 ```
 
-### 2. Reading Configuration Values
+### 2. ServiceGroup for Automatic Polling
+
+**Important**: The provider implements the `Service` protocol and must be run within a `ServiceGroup` to enable automatic polling and reloading:
+
+```swift
+import ServiceLifecycle
+
+// Create the service group with the provider
+let serviceGroup = ServiceGroup(
+    services: [provider],
+    logger: logger
+)
+
+// Run the service group (this enables the pollInterval functionality)
+Task {
+    do {
+        try await serviceGroup.run()
+    } catch {
+        logger.error("ServiceGroup error: \(error)")
+    }
+}
+```
+
+Without the ServiceGroup, the provider will only load the configuration once at initialization and won't poll for updates.
+
+### 3. Reading Configuration Values
 ```swift
 // Access provider through ConfigReader
 let reader = ConfigReader(provider: provider)
@@ -215,7 +253,7 @@ let timeout = reader.int(forKey: "timeout", default: 30)
 let betaMode = reader.bool(forKey: "features.betaMode", default: false)
 ```
 
-### 3. SwiftUI State Binding
+### 4. SwiftUI State Binding
 ```swift
 @ObservedObject var viewModel: ContentViewViewModel
 

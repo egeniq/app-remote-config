@@ -4,11 +4,13 @@ import AppRemoteConfigProvider
 import AppRemoteConfig
 import Configuration
 import Logging
+import ServiceLifecycle
 
 @main
 struct SwiftUIExampleApp: App {
     @State private var viewModel: ContentViewViewModel?
     @State private var error: String?
+    @State private var serviceGroup: ServiceGroup?
     
     var body: some Scene {
         WindowGroup {
@@ -89,8 +91,24 @@ struct SwiftUIExampleApp: App {
             logger.info("Platform: \(platform), OS: \(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)")
             logger.info("App version: \(appVersion), Build variant: \(buildVariant)")
             
-            // Step 9: Create the view model with the initialized provider
+            // Step 9: Create ServiceGroup to run the provider (enables polling)
+            let serviceGroup = ServiceGroup(
+                services: [provider],
+                logger: logger
+            )
+            
+            // Step 10: Start the service group in a background task
+            Task {
+                do {
+                    try await serviceGroup.run()
+                } catch {
+                    logger.error("ServiceGroup error: \(error)")
+                }
+            }
+            
+            // Step 11: Create the view model with the initialized provider
             await MainActor.run {
+                self.serviceGroup = serviceGroup
                 self.viewModel = ContentViewViewModel(provider: provider)
             }
         } catch {
