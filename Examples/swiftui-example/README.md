@@ -14,9 +14,40 @@ The example app shows:
 ## Key Components
 
 ### `App.swift` - Application Entry Point
-- Initializes the `AppRemoteConfigProvider` on app launch
-- Creates example configuration file in temporary directory
-- Handles initialization errors with user-friendly error view
+- Initializes the `AppRemoteConfigProvider` with proper `ResolutionContext`
+- Creates and writes example configuration JSON file
+- Demonstrates async provider instantiation with error handling
+- Shows proper resolution context setup with platform, version, and language
+
+### ResolutionContext Configuration
+
+The example shows how to populate `ResolutionContext` with:
+
+```swift
+let resolutionContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+    platform: .iOS,                        // Device platform
+    platformVersion: OperatingSystemVersion(
+        majorVersion: 17,                  // OS version
+        minorVersion: 0,
+        patchVersion: 0
+    ),
+    appVersion: try Version("1.0.0"),     // App version for variant selection
+    variant: nil,                          // Optional variant for A/B testing
+    buildVariant: .debug,                 // Debug or Release build
+    language: Locale.current.language.languageCode?.identifier  // User language
+)
+```
+
+### AppRemoteConfigProvider Instantiation
+
+```swift
+let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+    url: configFileURL,
+    pollInterval: .seconds(30),            // Poll interval (nil to disable)
+    minimumRefreshInterval: .seconds(5),   // Minimum wait between refreshes
+    resolutionContext: resolutionContext
+)
+```
 
 ### `ContentViewViewModel.swift` - State Management
 - `@MainActor` class managing provider state
@@ -70,19 +101,32 @@ open -a Xcode SwiftUIExample.xcodeproj
 
 ### 1. Provider Initialization
 ```swift
-let provider = AppRemoteConfigProvider<JSONSnapshot>(
-    resolutionContext: context,
+// Create resolution context with platform and app information
+let resolutionContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+    platform: .iOS,
+    platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+    appVersion: try Version("1.0.0"),
+    variant: nil,
+    buildVariant: .debug,
+    language: Locale.current.language.languageCode?.identifier
+)
+
+// Instantiate the provider
+let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+    url: configFileURL,
     pollInterval: .seconds(30),
     minimumRefreshInterval: .seconds(5),
-    fileURL: configFileURL
+    resolutionContext: resolutionContext
 )
 ```
 
 ### 2. Reading Configuration Values
 ```swift
+// Access provider through ConfigReader
 let reader = ConfigReader(provider: provider)
 let endpoint = reader.string(forKey: "apiEndpoint", default: "...")
 let timeout = reader.int(forKey: "timeout", default: 30)
+let betaMode = reader.bool(forKey: "features.betaMode", default: false)
 ```
 
 ### 3. SwiftUI State Binding
