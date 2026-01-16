@@ -36,7 +36,7 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     /// - Parameters:
     ///   - key: The configuration key path (dot-separated for nested values)
     ///   - default: The default value to use if the key is not found
-    public init(_ key: String, default defaultValue: Value) where Value: ConfigValue {
+    public init(_ key: String, default defaultValue: Value) where Value: ConfigPrimitiveValue {
         self.key = key
         self.defaultValue = defaultValue
         @Dependency(\.defaultConfigurationProvider) var provider
@@ -49,7 +49,7 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     ///   - key: The configuration key path (dot-separated for nested values)
     ///   - default: The default value to use if the key is not found
     ///   - provider: The configuration provider to read from
-    public init(_ key: String, default defaultValue: Value, provider: any ConfigProvider) where Value: ConfigValue {
+    public init(_ key: String, default defaultValue: Value, provider: any ConfigProvider) where Value: ConfigPrimitiveValue {
         self.key = key
         self.defaultValue = defaultValue
         self.provider = provider
@@ -157,13 +157,13 @@ public struct ConfigurationKeyID: Hashable {
 }
 
 /// Marker protocol to constrain supported configuration value types
-public protocol ConfigValue: Sendable {}
+public protocol ConfigPrimitiveValue: Sendable {}
 
-extension String: ConfigValue {}
-extension Int: ConfigValue {}
-extension Double: ConfigValue {}
-extension Bool: ConfigValue {}
-extension Array: ConfigValue where Element == String {}
+extension String: ConfigPrimitiveValue {}
+extension Int: ConfigPrimitiveValue {}
+extension Double: ConfigPrimitiveValue {}
+extension Bool: ConfigPrimitiveValue {}
+extension Array: ConfigPrimitiveValue where Element == String {}
 
 /// Extension to make ConfigurationKey more ergonomic to use
 extension SharedReaderKey where Self == ConfigurationKey<String> {

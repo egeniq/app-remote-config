@@ -132,6 +132,13 @@ let package = Package(
                 .product(name: "Configuration", package: "swift-configuration"),
                 .product(name: "Sharing", package: "swift-sharing"),
             ]
+        ),
+        .testTarget(
+            name: "ConfigurationSharingTests",
+            dependencies: [
+                "ConfigurationSharing",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+            ]
         )
     ]
 )
