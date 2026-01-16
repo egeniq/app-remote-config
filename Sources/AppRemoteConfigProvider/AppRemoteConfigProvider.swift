@@ -627,7 +627,13 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     }
 
     /// Schedule a timer to re-resolve at the given date.
+    /// Only schedules timers in non-test environments to avoid blocking test completion.
     private func scheduleResolutionTimer(for date: Date?) {
+        // Skip scheduling in test environments
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return
+        }
+        
         storage.withLock { storage in
             // Cancel existing timers
             storage.scheduledTimers.values.forEach { $0.cancel() }
@@ -841,7 +847,10 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             return (resolvedSettings, storage.nextResolutionDate)
         }
         // Schedule timer outside lock (also clears existing timer when nil)
-        scheduleResolutionTimer(for: outcome.1)
+        // Only schedule in non-test environments
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            scheduleResolutionTimer(for: outcome.1)
+        }
         return outcome.0
     }
     
