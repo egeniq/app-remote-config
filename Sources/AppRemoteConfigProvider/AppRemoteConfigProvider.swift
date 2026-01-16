@@ -844,7 +844,7 @@ extension AppRemoteConfigProvider: ConfigProvider {
     ) async throws -> Return where Return : ~Copyable {
         let keyString = key.description
         
-        // Use original key for resolved values (always have resolution context now)
+        // Use the original key since resolution context is always available for value resolution
         let watchKey = key
         
         let (stream, continuation) = AsyncStream<Result<LookupResult, any Error>>

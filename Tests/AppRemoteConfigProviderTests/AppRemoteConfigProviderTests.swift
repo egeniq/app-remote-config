@@ -87,7 +87,7 @@ struct AppRemoteConfigProviderTests {
     }
     
     @Test
-    func valueResolutionWithContext() async throws {
+    func basicValueResolution() async throws {
         let configUrl = try createTestConfigFile()
         defer { try? FileManager.default.removeItem(at: configUrl) }
         
