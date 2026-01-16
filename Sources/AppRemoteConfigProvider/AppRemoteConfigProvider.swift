@@ -1,4 +1,3 @@
-//#if ReloadingSupport
 import AppRemoteConfig
 
 #if canImport(FoundationEssentials)
@@ -7,7 +6,6 @@ import FoundationEssentials
 import Foundation
 #endif
 
-import SystemPackage
 public import ServiceLifecycle
 public import Logging
 public import Metrics
@@ -24,23 +22,22 @@ public import Configuration
 ///
 /// ## Swift-Configuration Integration
 ///
-/// `AppRemoteConfigProvider` conforms to swift-configuration's `Provider` protocol, allowing
-/// it to be used directly with `ConfigReader`. It resolves configuration values based on
-/// context provided by another `Provider` (platform, version, variant, language).
+/// `AppRemoteConfigProvider` conforms to swift-configuration's `ConfigProvider` protocol, allowing
+/// it to be used directly with `ConfigReader`. It provides access to configuration values through
+/// the snapshot's raw data.
 ///
 /// ```swift
-/// // Create a context provider with environment values
-/// let contextProvider = InMemoryProvider(values: [
-///     "platform.name": "iOS",
-///     "platform.version": "17.0.0",
-///     "app.version": "1.2.0",
-///     "app.buildVariant": "debug",
-/// ])
-///
-/// // Create the remote config provider with context support
+/// // Create the remote config provider with resolution context
+/// let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+///     platform: .iOS,
+///     platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+///     appVersion: try Version("1.2.0"),
+///     buildVariant: .debug
+/// )
+/// 
 /// let configProvider = try await AppRemoteConfigProvider<JSONSnapshot>(
 ///     url: URL(string: "https://example.com/config.json")!,
-///     contextProvider: contextProvider
+///     resolutionContext: context
 /// )
 ///
 /// // Use with ConfigReader
@@ -62,14 +59,14 @@ public import Configuration
 /// ```swift
 /// // Using with a JSON snapshot and a custom poll interval
 /// let jsonProvider = try await AppRemoteConfigProvider<JSONSnapshot>(
-///     url: "https://www.example.com/config.json",
-///     minimumRefreshInterval: .seconds(30)
+///     url: URL(string: "https://www.example.com/config.json")!,
+///     pollInterval: .seconds(30)
 /// )
 ///
 /// // Using with a YAML snapshot
 /// let yamlProvider = try await AppRemoteConfigProvider<YAMLSnapshot>(
-///     url: "https://www.example.com/config.yaml",
-///     minimumRefreshInterval: .seconds(30)
+///     url: URL(string: "https://www.example.com/config.yaml")!,
+///     pollInterval: .seconds(30)
 /// )
 /// ```
 ///
@@ -79,17 +76,17 @@ public import Configuration
 /// to enable automatic reloading:
 ///
 /// ```swift
-/// let environmentProvider = InMemoryProvider(values: [
-///     "app.version": "1.0",
-///     "app.variant": "custom1",
-///     "app.buildVariant": "debug",
-///     "app.language": "en",
-///     "platform.name": "iOS",
-///     "platform.version": "26.1",
-/// ])
+/// let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+///     platform: .iOS,
+///     platformVersion: OperatingSystemVersion(majorVersion: 26, minorVersion: 1, patchVersion: 0),
+///     appVersion: try Version("1.0"),
+///     variant: "custom1",
+///     buildVariant: .debug,
+///     language: "en"
+/// )
 /// let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
-///     url: "https://www.example.com/config.json",
-///     contextProvider: environmentProvider
+///     url: URL(string: "https://www.example.com/config.json")!,
+///     resolutionContext: context
 /// )
 /// let serviceGroup = ServiceGroup(services: [provider], logger: logger)
 /// try await serviceGroup.run()
@@ -122,8 +119,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         /// Last modified timestamp of the resolved file.
         var lastModifiedTimestamp: Date
 
-//        /// The resolved real file path.
-//        var realFilePath: FilePath
+        /// The URL of the configuration file.
         var url: URL
 
         /// Active watchers for individual configuration values, keyed by encoded key.
@@ -152,10 +148,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     /// The options used for parsing the data.
     private let parsingOptions: Snapshot.ParsingOptions
 
-//    /// The file system interface for reading files and timestamps.
-//    private let fileSystem: any CommonProviderFileSystem
-
-    /// The original unresolved file path provided by the user, may contain symlinks.
+    /// The URL of the configuration file to monitor.
     private let url: URL
 
     /// The interval between polling checks.
@@ -205,7 +198,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         url: URL,
         pollInterval: Duration = .seconds(15),
         resolutionContext: ResolutionContext? = nil,
-//        fileSystem: any CommonProviderFileSystem,
         logger: Logger = Logger(label: "AppRemoteConfigProvider"),
         metrics: any MetricsFactory = MetricsSystem.factory
     ) async throws {
@@ -214,7 +206,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         self.pollInterval = pollInterval
         self.resolutionContext = .init(resolutionContext)
         self.providerName = "AppRemoteConfigProvider<\(Snapshot.self)>"
-//        self.fileSystem = fileSystem
 
         // Set up the logger with metadata
         var logger = logger
@@ -232,9 +223,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
 
         // Perform initial load
         logger.debug("Performing initial file load")
-//        let realPath = try await fileSystem.resolveSymlinks(atPath: filePath)
-//        let timestamp = try await fileSystem.lastModifiedTimestamp(atPath: realPath)
-//        let data = try await fileSystem.fileContents(atPath: realPath)
         let timestamp = Date()
         let data = try Data(contentsOf: url)
         let initialSnapshot = try snapshotType.init(
@@ -249,7 +237,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 snapshot: initialSnapshot,
                 lastModifiedTimestamp: timestamp,
                 url: url,
-//                realFilePath: realPath,
                 valueWatchers: [:],
                 snapshotWatchers: [:]
             )
@@ -298,7 +285,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             url: config.requiredString(forKey: "url", as: URL.self),
             pollInterval: Duration.seconds(config.int(forKey: "pollIntervalSeconds", default: 15)),
             resolutionContext: resolutionContext,
-//            fileSystem: LocalCommonProviderFileSystem(),
             logger: logger,
             metrics: metrics
         )
@@ -332,8 +318,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             logger.debug("reloadIfNeeded finished")
         }
 
-        let candidateRealPath = url // try await fileSystem.resolveSymlinks(atPath: filePath)
-        let candidateTimestamp = Date() // fileSystem.lastModifiedTimestamp(atPath: candidateRealPath)
+        let candidateRealPath = url
+        let candidateTimestamp = Date()
 
         guard
             let (originalTimestamp, originalRealPath) =
@@ -549,14 +535,6 @@ extension AppRemoteConfigProvider: ConfigProvider {
         type: Configuration.ConfigType,
         updatesHandler: nonisolated(nonsending) (Configuration.ConfigUpdatesAsyncSequence<Result<Configuration.LookupResult, any Error>, Never>) async throws -> Return
     ) async throws -> Return where Return : ~Copyable {
-        //        code
-//    }
-    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-//    public func watchValue<Return>(
-//        forKey key: AbsoluteConfigKey,
-//        type: ConfigType,
-//        updatesHandler: (ConfigUpdatesAsyncSequence<Result<LookupResult, any Error>, Never>) async throws -> Return
-//    ) async throws -> Return {
         let (stream, continuation) = AsyncStream<Result<LookupResult, any Error>>
             .makeStream(bufferingPolicy: .bufferingNewest(1))
         let id = UUID()
@@ -587,13 +565,6 @@ extension AppRemoteConfigProvider: ConfigProvider {
     }
 
     public func watchSnapshot<Return>(updatesHandler: nonisolated(nonsending) (Configuration.ConfigUpdatesAsyncSequence<any Configuration.ConfigSnapshot, Never>) async throws -> Return) async throws -> Return where Return : ~Copyable {
-        
-//    }
-//    
-//    // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
-//    public func watchSnapshot<Return>(
-//        updatesHandler: (ConfigUpdatesAsyncSequence<any ConfigSnapshot, Never>) async throws -> Return
-//    ) async throws -> Return {
         let (stream, continuation) = AsyncStream<Snapshot>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let id = UUID()
 
