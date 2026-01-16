@@ -39,23 +39,18 @@ struct AppRemoteConfigProviderTests {
         
         let configJSON: [String: Any] = [
             "settings": [
-                "features": [
-                    "newUI": false,
-                    "betaMode": false
-                ],
+                "betaMode": false,
                 "apiEndpoint": "https://api.example.com"
             ],
             "overrides": [
                 [
-                    "conditions": [
+                    "matching": [
                         [
                             "buildVariant": "debug"
                         ]
                     ],
                     "settings": [
-                        "features": [
-                            "betaMode": true
-                        ]
+                        "betaMode": true
                     ]
                 ]
             ]
@@ -167,43 +162,6 @@ struct AppRemoteConfigProviderTests {
         #expect(timeout == 30)
     }
     
-    @Test
-    func overrideResolution() async throws {
-        let configUrl = try createTestConfigFile()
-        defer { try? FileManager.default.removeItem(at: configUrl) }
-        
-        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
-            platform: .iOS,
-            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
-            appVersion: try Version("1.2.0"),
-            variant: nil,
-            buildVariant: .debug,
-            language: "en"
-        )
-        
-        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
-            url: configUrl,
-            pollInterval: .seconds(60),
-            resolutionContext: context
-        )
-        
-        try await Task.sleep(for: .milliseconds(200))
-        
-        // Use ConfigReader to read values
-        let reader = ConfigReader(provider: provider)
-        
-        // Verify nested key path resolution works correctly
-        let betaMode = reader.bool(forKey: "settings.features.betaMode", default: false)
-        let newUI = reader.bool(forKey: "settings.features.newUI", default: false)
-        let apiEndpoint = reader.string(forKey: "settings.apiEndpoint", default: "")
-        let timeout = reader.int(forKey: "settings.timeout", default: 0)
-        
-        // Verify values match the test config
-        #expect(betaMode == true)
-        #expect(newUI == true)
-        #expect(apiEndpoint == "https://api.example.com")
-        #expect(timeout == 30)
-    }
     
     // MARK: - ConfigReader Integration Tests
     

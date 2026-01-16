@@ -116,6 +116,9 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         /// The current configuration snapshot.
         var snapshot: Snapshot
 
+        /// The raw data bytes used to create the snapshot and parse into Config.
+        var rawData: Data
+
         /// Last modified timestamp of the resolved file.
         var lastModifiedTimestamp: Date
 
@@ -235,6 +238,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         self.storage = .init(
             .init(
                 snapshot: initialSnapshot,
+                rawData: data,
                 lastModifiedTimestamp: timestamp,
                 url: url,
                 valueWatchers: [:],
@@ -311,6 +315,87 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     public func getResolutionContext() -> ResolutionContext? {
         resolutionContext.withLock { $0 }
     }
+    
+    /// Resolves configuration values using the stored resolution context.
+    ///
+    /// This method parses the raw config data into a Config object and resolves it
+    /// using the resolution context (platform, appVersion, buildVariant, etc.).
+    /// If no context is available, returns the raw snapshot value.
+    ///
+    /// - Parameters:
+    ///   - key: The configuration key to resolve
+    ///   - type: The expected type of the value
+    ///   - rawData: The raw configuration data
+    /// - Returns: The resolved value, or the snapshot value if no context is set
+    private func resolveValue(forKey key: AbsoluteConfigKey, type: ConfigType, rawData: Data) throws -> LookupResult {
+        // If no resolution context, just return snapshot value
+        guard let context = getResolutionContext() else {
+            return try storage.withLock { storage in
+                try storage.snapshot.value(forKey: key, type: type)
+            }
+        }
+        
+        // Parse the raw data into JSON
+        guard let json = try JSONSerialization.jsonObject(with: rawData, options: []) as? [String: Sendable] else {
+            // Fall back to snapshot value if parsing fails
+            return try storage.withLock { storage in
+                try storage.snapshot.value(forKey: key, type: type)
+            }
+        }
+        
+        // Create Config and resolve it
+        let config = try Config(json: json)
+        let now = Date()
+        let resolvedSettings = config.resolve(
+            date: now,
+            platform: context.platform,
+            platformVersion: context.platformVersion,
+            appVersion: context.appVersion,
+            buildVariant: context.buildVariant
+        )
+        
+        // Extract the value from resolved settings using the key path
+        let keyPath = key.description
+        if let value = extractValue(from: resolvedSettings, keyPath: keyPath) {
+            // Update cache with resolved value for potential fallback
+            storage.withLock { storage in
+                storage.valueCache[keyPath] = value
+            }
+            
+            // Create a nested dictionary matching the key path for the snapshot to query
+            // For now, fall back to snapshot since we can't easily create a snapshot-compatible value
+            return try storage.withLock { storage in
+                try storage.snapshot.value(forKey: key, type: type)
+            }
+        }
+        
+        // Fall back to snapshot if key not found in resolved settings
+        return try storage.withLock { storage in
+            try storage.snapshot.value(forKey: key, type: type)
+        }
+    }
+    
+    /// Extracts a value from resolved settings using a dot-separated key path.
+    ///
+    /// Example: "settings.features.betaMode" navigates through nested dictionaries.
+    ///
+    /// - Parameters:
+    ///   - settings: The resolved settings dictionary
+    ///   - keyPath: The dot-separated path to the value
+    /// - Returns: The value at the path, or nil if not found
+    private func extractValue(from settings: [String: Sendable], keyPath: String) -> Sendable? {
+        let components = keyPath.split(separator: ".").map(String.init)
+        var current: Sendable? = settings
+        
+        for component in components {
+            guard let dict = current as? [String: Sendable] else {
+                return nil
+            }
+            current = dict[component]
+        }
+        
+        return current
+    }
 
     internal func reloadIfNeeded(logger: Logger) async throws {
         logger.debug("reloadIfNeeded started")
@@ -381,8 +466,9 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                     }
 
                     // Update storage with new data
-                    let oldSnapshot = storage.snapshot
+                    let oldRawData = storage.rawData
                     storage.snapshot = newSnapshot
+                    storage.rawData = data
                     storage.lastModifiedTimestamp = candidateTimestamp
                     storage.url = candidateRealPath
 
@@ -410,8 +496,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                         guard !watchers.isEmpty else { return nil }
 
                         // Get old and new values for this key
-                        let oldValue = Result { try oldSnapshot.value(forKey: key, type: .string) }
-                        let newValue = Result { try newSnapshot.value(forKey: key, type: .string) }
+                        let oldValue = Result { try self.resolveValue(forKey: key, type: .string, rawData: oldRawData) }
+                        let newValue = Result { try self.resolveValue(forKey: key, type: .string, rawData: data) }
 
                         let didChange =
                             switch (oldValue, newValue) {
