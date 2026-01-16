@@ -186,6 +186,225 @@ struct AppRemoteConfigProviderTests {
         #expect(timeout == 30)
     }
     
+    // MARK: - Value Type Tests
+    
+    @Test
+    func allValueTypesUnsigned() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let configUrl = tempDir.appendingPathComponent("test-types-\(UUID().uuidString).json")
+        
+        let configJSON: [String: Any] = [
+            "settings": [
+                "boolValue": true,
+                "intValue": 42,
+                "doubleValue": 3.14,
+                "stringValue": "hello",
+                "stringArray": ["one", "two", "three"],
+                "intArray": [1, 2, 3],
+                "doubleArray": [1.1, 2.2, 3.3],
+                "boolArray": [true, false, true]
+            ],
+            "overrides": []
+        ]
+        
+        let jsonData = try JSONSerialization.data(withJSONObject: configJSON)
+        try jsonData.write(to: configUrl)
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            resolutionContext: context
+        )
+        
+        let reader = ConfigReader(provider: provider)
+        
+        // Test all value types
+        #expect(reader.bool(forKey: "boolValue", default: false) == true)
+        #expect(reader.int(forKey: "intValue", default: 0) == 42)
+        #expect(reader.double(forKey: "doubleValue", default: 0.0) == 3.14)
+        #expect(reader.string(forKey: "stringValue", default: "") == "hello")
+        
+        let stringArray = reader.stringArray(forKey: "stringArray", default: [])
+        #expect(stringArray == ["one", "two", "three"])
+        
+        let intArray = reader.intArray(forKey: "intArray", default: [])
+        #expect(intArray == [1, 2, 3])
+        
+        let doubleArray = reader.doubleArray(forKey: "doubleArray", default: [])
+        #expect(doubleArray == [1.1, 2.2, 3.3])
+        
+        let boolArray = reader.boolArray(forKey: "boolArray", default: [])
+        #expect(boolArray == [true, false, true])
+    }
+    
+    @Test
+    func allValueTypesSigned() async throws {
+        let privateKey = Curve25519.Signing.PrivateKey()
+        
+        let configJSON: [String: Any] = [
+            "settings": [
+                "boolValue": true,
+                "intValue": 42,
+                "doubleValue": 3.14,
+                "stringValue": "hello",
+                "stringArray": ["one", "two", "three"],
+                "intArray": [1, 2, 3],
+                "doubleArray": [1.1, 2.2, 3.3],
+                "boolArray": [true, false, true]
+            ],
+            "overrides": []
+        ]
+        
+        let configData = try JSONSerialization.data(withJSONObject: configJSON)
+        let signature = try privateKey.signature(for: configData)
+        let signedData = try JSONSerialization.data(
+            withJSONObject: [
+                Config.dataKey: configData.base64EncodedString(),
+                Config.signatureKey: signature.base64EncodedString()
+            ],
+            options: [.sortedKeys]
+        )
+        
+        let tempDir = FileManager.default.temporaryDirectory
+        let configUrl = tempDir.appendingPathComponent("signed-types-\(UUID().uuidString).json")
+        try signedData.write(to: configUrl)
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            resolutionContext: context,
+            publicKey: privateKey.publicKey
+        )
+        
+        let reader = ConfigReader(provider: provider)
+        
+        // Test all value types with signed config
+        #expect(reader.bool(forKey: "boolValue", default: false) == true)
+        #expect(reader.int(forKey: "intValue", default: 0) == 42)
+        #expect(reader.double(forKey: "doubleValue", default: 0.0) == 3.14)
+        #expect(reader.string(forKey: "stringValue", default: "") == "hello")
+        
+        let stringArray = reader.stringArray(forKey: "stringArray", default: [])
+        #expect(stringArray == ["one", "two", "three"])
+        
+        let intArray = reader.intArray(forKey: "intArray", default: [])
+        #expect(intArray == [1, 2, 3])
+        
+        let doubleArray = reader.doubleArray(forKey: "doubleArray", default: [])
+        #expect(doubleArray == [1.1, 2.2, 3.3])
+        
+        let boolArray = reader.boolArray(forKey: "boolArray", default: [])
+        #expect(boolArray == [true, false, true])
+    }
+    
+    @Test
+    func booleanEdgeCases() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let configUrl = tempDir.appendingPathComponent("test-bool-edge-\(UUID().uuidString).json")
+        
+        // Test that JSON numbers 0 and 1 are correctly interpreted as booleans
+        let configJSON: [String: Any] = [
+            "settings": [
+                "explicitTrue": true,
+                "explicitFalse": false,
+                "boolArrayMixed": [true, false, true, false]
+            ],
+            "overrides": []
+        ]
+        
+        let jsonData = try JSONSerialization.data(withJSONObject: configJSON)
+        try jsonData.write(to: configUrl)
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            resolutionContext: context
+        )
+        
+        let reader = ConfigReader(provider: provider)
+        
+        #expect(reader.bool(forKey: "explicitTrue", default: false) == true)
+        #expect(reader.bool(forKey: "explicitFalse", default: true) == false)
+        
+        let boolArray = reader.boolArray(forKey: "boolArrayMixed", default: [])
+        #expect(boolArray == [true, false, true, false])
+    }
+    
+    @Test
+    func typeCoercionFallback() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let configUrl = tempDir.appendingPathComponent("test-type-fallback-\(UUID().uuidString).json")
+        
+        // Test that requesting wrong types returns default values
+        let configJSON: [String: Any] = [
+            "settings": [
+                "stringValue": "hello",
+                "intValue": 42,
+                "boolValue": true
+            ],
+            "overrides": []
+        ]
+        
+        let jsonData = try JSONSerialization.data(withJSONObject: configJSON)
+        try jsonData.write(to: configUrl)
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            resolutionContext: context
+        )
+        
+        let reader = ConfigReader(provider: provider)
+        
+        // Request int from string value - should return default
+        #expect(reader.int(forKey: "stringValue", default: 999) == 999)
+        
+        // Request string from int value - should return default
+        #expect(reader.string(forKey: "intValue", default: "fallback") == "fallback")
+        
+        // Request array from scalar value - should return default
+        #expect(reader.stringArray(forKey: "stringValue", default: ["default"]) == ["default"])
+        
+        // Request non-existent key - should return default
+        #expect(reader.bool(forKey: "nonExistent", default: false) == false)
+    }
+    
     // MARK: - Signed Config Tests
     
     @Test
