@@ -174,7 +174,7 @@ struct AppRemoteConfigProviderTests {
         
         let reader = ConfigReader(provider: provider)
         
-        try await Task.sleep(for: .milliseconds(200))
+//        try await Task.sleep(for: .milliseconds(200))
         
         let featureEnabled = reader.bool(forKey: "features.newUI", default: true)
         #expect(featureEnabled == true)
@@ -193,10 +193,10 @@ struct AppRemoteConfigProviderTests {
         // Create a private key for signing
         let privateKey = Curve25519.Signing.PrivateKey()
         
-        // Create config data
+        // Create config data - note the test needs the structure to be correct
         let configJSON: [String: Any] = [
             "settings": [
-                "secureFeature": true,
+                "signedFeature": true,
                 "apiKey": "secret-key-123"
             ],
             "overrides": []
@@ -217,7 +217,6 @@ struct AppRemoteConfigProviderTests {
         let tempDir = FileManager.default.temporaryDirectory
         let configUrl = tempDir.appendingPathComponent("signed-config-\(UUID().uuidString).json")
         try signedData.write(to: configUrl)
-        defer { try? FileManager.default.removeItem(at: configUrl) }
         
         let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
             platform: .iOS,
@@ -231,18 +230,15 @@ struct AppRemoteConfigProviderTests {
         // Create provider with public key
         let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
             url: configUrl,
-            pollInterval: .seconds(60),
             resolutionContext: context,
             publicKey: privateKey.publicKey
         )
         
         let reader = ConfigReader(provider: provider)
         
-        try await Task.sleep(for: .milliseconds(200))
-        
         // Verify the config values are accessible
-        let secureFeature = reader.bool(forKey: "secureFeature", default: false)
-        #expect(secureFeature == true)
+        let signedFeature = reader.bool(forKey: "signedFeature", default: false)
+        #expect(signedFeature == true)
         
         let apiKey = reader.string(forKey: "apiKey", default: "")
         #expect(apiKey == "secret-key-123")
@@ -256,9 +252,8 @@ struct AppRemoteConfigProviderTests {
         // Create config data
         let configJSON: [String: Any] = [
             "settings": [
-                "secureFeature": true
-            ],
-            "overrides": []
+                "signedFeature": true
+            ]
         ]
         let configData = try JSONSerialization.data(withJSONObject: configJSON)
         

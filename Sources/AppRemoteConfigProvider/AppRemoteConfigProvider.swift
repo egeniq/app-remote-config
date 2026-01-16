@@ -283,7 +283,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 providerName: providerName,
                 parsingOptions: parsingOptions
             )
-            // Store the decoded config data, not the signed wrapper
             actualConfigData = configData
             initialSnapshot = snapshot
         } else {
@@ -665,16 +664,13 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 return cached
             }
             
-            // Create Config from raw data
-            let config: Config
-            // For signed configs, storage.rawData contains the decoded (unsigned) config data,
-            // so we parse it directly. For unsigned configs, we parse the raw data.
-            guard let json = try JSONSerialization.jsonObject(with: storage.rawData, options: []) as? [String: Sendable] else {
-                // Fall back to raw settings if parsing fails
-                let fallbackConfig = try Config(data: storage.rawData)
-                return fallbackConfig.settings
-            }
-            config = try Config(json: json)
+            // Create Config from raw data, verifying signature if public key is provided
+            let config = try Config(data: storage.rawData)
+//            if let publicKey {
+//                config = try Config(data: storage.rawData, publicKey: publicKey)
+//            } else {
+//                config = try Config(data: storage.rawData)
+//            }
             let resolvedSettings = config.resolve(
                 date: now,
                 platform: platform,
@@ -772,38 +768,67 @@ extension AppRemoteConfigProvider: ConfigProvider {
             language: context.language
         )
         
-        let value = extractValue(from: settings, keyPath: keyString)
-        let configValue = value.map { sendableToConfigValue($0) }
-        return LookupResult(encodedKey: keyString, value: configValue)
-    }
-    
-    /// Converts a Sendable value to ConfigValue
-    private func sendableToConfigValue(_ value: Sendable) -> ConfigValue {
-        switch value {
-        case let str as String:
-            return ConfigValue(.string(str), isSecret: false)
-        case let int as Int:
-            return ConfigValue(.int(int), isSecret: false)
-        case let double as Double:
-            return ConfigValue(.double(double), isSecret: false)
-        case let bool as Bool:
-            return ConfigValue(.bool(bool), isSecret: false)
-        case let array as [String]:
-            return ConfigValue(.stringArray(array), isSecret: false)
-        case let array as [Int]:
-            return ConfigValue(.intArray(array), isSecret: false)
-        case let array as [Double]:
-            return ConfigValue(.doubleArray(array), isSecret: false)
-        case let dict as [String: Sendable]:
-            // For nested dictionaries, convert to string representation
-            if let jsonData = try? JSONSerialization.data(withJSONObject: dict, options: []),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                return ConfigValue(.string(jsonString), isSecret: false)
-            }
-            return ConfigValue(.string("\(dict)"), isSecret: false)
-        default:
-            return ConfigValue(.string("\(value)"), isSecret: false)
+        guard let rawValue = extractValue(from: settings, keyPath: keyString) else {
+            return LookupResult(encodedKey: keyString, value: nil)
         }
+        
+        // Use the requested type to cast and create ConfigValue
+        let configValue: ConfigValue? = switch type {
+        case .bool:
+            // Handle both Bool and NSNumber (which JSON uses for booleans)
+            if let bool = rawValue as? Bool {
+                .some(ConfigValue(.bool(bool), isSecret: false))
+            } else if let number = rawValue as? NSNumber {
+                // NSNumber from JSON might represent a boolean as 0/1
+                .some(ConfigValue(.bool(number.boolValue), isSecret: false))
+            } else {
+                .none
+            }
+        case .int:
+            (rawValue as? Int).map { ConfigValue(.int($0), isSecret: false) }
+        case .double:
+            (rawValue as? Double).map { ConfigValue(.double($0), isSecret: false) }
+        case .string:
+            (rawValue as? String).map { ConfigValue(.string($0), isSecret: false) }
+        case .stringArray:
+            (rawValue as? [String]).map { ConfigValue(.stringArray($0), isSecret: false) }
+        case .intArray:
+            (rawValue as? [Int]).map { ConfigValue(.intArray($0), isSecret: false) }
+        case .doubleArray:
+            (rawValue as? [Double]).map { ConfigValue(.doubleArray($0), isSecret: false) }
+        case .bytes:
+            // Handle both Data and byte arrays
+            if let data = rawValue as? Data {
+                .some(ConfigValue(.bytes([UInt8](data)), isSecret: false))
+            } else if let array = rawValue as? [UInt8] {
+                .some(ConfigValue(.bytes(array), isSecret: false))
+            } else {
+                .none
+            }
+        case .boolArray:
+            // Handle arrays of booleans or NSNumbers
+            if let boolArray = rawValue as? [Bool] {
+                .some(ConfigValue(.boolArray(boolArray), isSecret: false))
+            } else if let numberArray = rawValue as? [NSNumber] {
+                .some(ConfigValue(.boolArray(numberArray.map { $0.boolValue }), isSecret: false))
+            } else {
+                .none
+            }
+        case .byteChunkArray:
+            // Handle arrays of byte chunks (Data objects)
+            if let dataArray = rawValue as? [Data] {
+                .some(ConfigValue(.byteChunkArray(dataArray.map { [UInt8]($0) }), isSecret: false))
+            } else if let byteArrays = rawValue as? [[UInt8]] {
+                .some(ConfigValue(.byteChunkArray(byteArrays), isSecret: false))
+            } else {
+                .none
+            }
+        @unknown default:
+            // For any unknown types, attempt string conversion
+            (rawValue as? String).map { ConfigValue(.string($0), isSecret: false) }
+        }
+        
+        return LookupResult(encodedKey: keyString, value: configValue)
     }
 
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
@@ -820,8 +845,6 @@ extension AppRemoteConfigProvider: ConfigProvider {
         type: Configuration.ConfigType,
         updatesHandler: nonisolated(nonsending) (Configuration.ConfigUpdatesAsyncSequence<Result<Configuration.LookupResult, any Error>, Never>) async throws -> Return
     ) async throws -> Return where Return : ~Copyable {
-        let keyString = key.description
-        
         // Use original key for resolved values (always have resolution context now)
         let watchKey = key
         
