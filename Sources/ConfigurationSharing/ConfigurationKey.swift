@@ -66,23 +66,16 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     ) -> SharedSubscription {
         let task = Task {
             do {
-                try await provider.watchValue(
-                    forKey: Configuration.AbsoluteConfigKey(stringLiteral: key),
-                    type: configType(for: Value.self)
-                ) { updates in
-                    for await result in updates {
-                        let value: Value
-                        switch result {
-                        case .success(let lookupResult):
-                            if let extractedValue = extractValue(from: lookupResult) {
-                                value = extractedValue
-                            } else {
-                                continue // Skip if value cannot be extracted
-                            }
-                        case .failure:
-                            continue // Skip on error
+                try await provider.watchSnapshot { updates in
+                    for await snapshot in updates {
+                        // Read the value from the snapshot
+                        if let result = try? snapshot.value(
+                            forKey: Configuration.AbsoluteConfigKey(stringLiteral: key),
+                            type: configType(for: Value.self)
+                        ),
+                           let extractedValue = extractValue(from: result) {
+                            subscriber.yield(with: .success(extractedValue))
                         }
-                        subscriber.yield(with: .success(value))
                     }
                 }
             } catch {
