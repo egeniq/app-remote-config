@@ -57,18 +57,28 @@ public import Configuration
 ///
 /// ## Usage
 ///
-/// Create a remote config provider by specifying the snapshot type and URL:
+/// Create a remote config provider by specifying the snapshot type, URL, and resolution context:
 ///
 /// ```swift
+/// // Create resolution context
+/// let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+///     platform: .iOS,
+///     platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+///     appVersion: try Version("1.2.0"),
+///     buildVariant: .debug
+/// )
+///
 /// // Using with a JSON snapshot and a custom poll interval
 /// let jsonProvider = try await AppRemoteConfigProvider<JSONSnapshot>(
 ///     url: URL(string: "https://www.example.com/config.json")!,
+///     resolutionContext: context,
 ///     pollInterval: .seconds(30)
 /// )
 ///
 /// // Using with a YAML snapshot
 /// let yamlProvider = try await AppRemoteConfigProvider<YAMLSnapshot>(
 ///     url: URL(string: "https://www.example.com/config.yaml")!,
+///     resolutionContext: context,
 ///     pollInterval: .seconds(30)
 /// )
 /// ```
@@ -100,11 +110,20 @@ public import Configuration
 ///
 /// ## Configuration from a reader
 ///
-/// You can also initialize the provider using a configuration reader:
+/// You can also initialize the provider using a configuration reader and resolution context:
 ///
 /// ```swift
+/// let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+///     platform: .iOS,
+///     platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+///     appVersion: try Version("1.2.0"),
+///     buildVariant: .debug
+/// )
 /// let envConfig = ConfigReader(provider: EnvironmentVariablesProvider())
-/// let provider = try await AppRemoteConfigProvider<JSONSnapshot>(config: envConfig)
+/// let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+///     config: envConfig,
+///     resolutionContext: context
+/// )
 /// ```
 ///
 /// This expects a `url` key in the configuration that specifies the URL to the file.
