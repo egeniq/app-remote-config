@@ -3,6 +3,7 @@ import Foundation
 import AppRemoteConfigProvider
 import AppRemoteConfig
 import Configuration
+import Logging
 
 @main
 struct SwiftUIExampleApp: App {
@@ -71,15 +72,24 @@ struct SwiftUIExampleApp: App {
                 language: Locale.current.language.languageCode?.identifier
             )
             
-            // Step 7: Instantiate AppRemoteConfigProvider
+            // Step 7: Create a logger to see provider activity
+            var logger = Logger(label: "com.example.remoteconfig")
+            logger.logLevel = .debug  // Set to .debug to see detailed activity
+            
+            // Step 8: Instantiate AppRemoteConfigProvider with logger
             let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
                 url: configFileURL,
                 pollInterval: .seconds(30),              // Poll every 30 seconds (nil to disable)
                 minimumRefreshInterval: .seconds(5),     // Minimum wait between refreshes
-                resolutionContext: resolutionContext
+                resolutionContext: resolutionContext,
+                logger: logger
             )
             
-            // Step 8: Create the view model with the initialized provider
+            logger.info("AppRemoteConfigProvider initialized successfully")
+            logger.info("Platform: \(platform), OS: \(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)")
+            logger.info("App version: \(appVersion), Build variant: \(buildVariant)")
+            
+            // Step 9: Create the view model with the initialized provider
             await MainActor.run {
                 self.viewModel = ContentViewViewModel(provider: provider)
             }

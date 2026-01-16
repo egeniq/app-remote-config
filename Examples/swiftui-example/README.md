@@ -6,6 +6,7 @@ This example demonstrates how to integrate `AppRemoteConfigProvider` into a Swif
 
 The example app shows:
 - **Provider Initialization**: Setting up `AppRemoteConfigProvider` with resolution context
+- **Logging**: Using `swift-log` Logger to see provider activity in console
 - **Configuration Management**: Reading and displaying remote configuration values
 - **SwiftUI Integration**: Using `@ObservedObject` and state management to display config values
 - **Error Handling**: Gracefully handling initialization failures
@@ -18,8 +19,9 @@ The example app shows:
 - Reads app version from `Info.plist` (`CFBundleShortVersionString`)
 - Determines build variant from `DEBUG` flag
 - Fetches OS version once using `ProcessInfo.processInfo.operatingSystemVersion`
-- Creates and writes example configuration JSON file
+- Creates a Logger instance to track provider activity
 - Demonstrates async provider instantiation with error handling
+- Logs initialization details for debugging
 
 ### ResolutionContext Configuration
 
@@ -120,6 +122,35 @@ Or open in Xcode:
 open -a Xcode SwiftUIExample.xcodeproj
 ```
 
+## Logging
+
+The example includes logging to help developers understand what the provider is doing:
+
+```swift
+import Logging
+
+var logger = Logger(label: "com.example.remoteconfig")
+logger.logLevel = .debug  // Set to .info, .debug, .trace, etc.
+```
+
+When running the app, you'll see log output like:
+- Provider initialization
+- Configuration file reads
+- Polling activity
+- Refresh operations
+- Error conditions
+
+To view logs:
+- **Xcode**: Open the Console (⌘⇧Y) when running the app
+- **Terminal**: Logs appear in stdout when running via `swift run`
+
+Log levels:
+- `.trace`: Very detailed debugging information
+- `.debug`: Detailed information useful during development
+- `.info`: General informational messages (recommended)
+- `.warning`: Warning messages
+- `.error`: Error messages only
+
 ## Key Integration Points
 
 ### 1. Provider Initialization with Automatic Detection
@@ -156,13 +187,23 @@ let resolutionContext = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
     language: Locale.current.language.languageCode?.identifier
 )
 
-// Instantiate the provider
+// Create a logger to see provider activity in console
+var logger = Logger(label: "com.example.remoteconfig")
+logger.logLevel = .debug  // Set to .debug to see detailed activity
+
+// Instantiate the provider with logger
 let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
     url: configFileURL,
     pollInterval: .seconds(30),
     minimumRefreshInterval: .seconds(5),
-    resolutionContext: resolutionContext
+    resolutionContext: resolutionContext,
+    logger: logger
 )
+
+// Log initialization details
+logger.info("AppRemoteConfigProvider initialized successfully")
+logger.info("Platform: \(platform), OS: \(osVersion.majorVersion).\(osVersion.minorVersion)")
+logger.info("App version: \(appVersion), Build variant: \(buildVariant)")
 ```
 
 ### 2. Reading Configuration Values
