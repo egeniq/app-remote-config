@@ -202,7 +202,8 @@ struct AppRemoteConfigProviderTests {
                 "stringArray": ["one", "two", "three"],
                 "intArray": [1, 2, 3],
                 "doubleArray": [1.1, 2.2, 3.3],
-                "boolArray": [true, false, true]
+                "boolArray": [true, false, true],
+                "dictionary": ["one": "foo", "two": true, "three": 3]
             ],
             "overrides": []
         ]
@@ -244,6 +245,11 @@ struct AppRemoteConfigProviderTests {
         
         let boolArray = reader.boolArray(forKey: "boolArray", default: [])
         #expect(boolArray == [true, false, true])
+        
+        // Test nested dictionary values
+        #expect(reader.string(forKey: "dictionary.one", default: "") == "foo")
+        #expect(reader.bool(forKey: "dictionary.two", default: false) == true)
+        #expect(reader.int(forKey: "dictionary.three", default: 0) == 3)
     }
     
     @Test
@@ -259,7 +265,8 @@ struct AppRemoteConfigProviderTests {
                 "stringArray": ["one", "two", "three"],
                 "intArray": [1, 2, 3],
                 "doubleArray": [1.1, 2.2, 3.3],
-                "boolArray": [true, false, true]
+                "boolArray": [true, false, true],
+                "dictionary": ["one": "foo", "two": true, "three": 3]
             ],
             "overrides": []
         ]
@@ -313,6 +320,11 @@ struct AppRemoteConfigProviderTests {
         
         let boolArray = reader.boolArray(forKey: "boolArray", default: [])
         #expect(boolArray == [true, false, true])
+        
+        // Test nested dictionary values
+        #expect(reader.string(forKey: "dictionary.one", default: "") == "foo")
+        #expect(reader.bool(forKey: "dictionary.two", default: false) == true)
+        #expect(reader.int(forKey: "dictionary.three", default: 0) == 3)
     }
     
     @Test
