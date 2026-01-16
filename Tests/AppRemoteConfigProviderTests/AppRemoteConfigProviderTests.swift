@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import Configuration
+import Crypto
 @testable import AppRemoteConfigProvider
 @testable import AppRemoteConfig
 
@@ -197,5 +198,92 @@ struct AppRemoteConfigProviderTests {
         
         let timeout = reader.int(forKey: "settings.timeout", default: 0)
         #expect(timeout == 30)
+    }
+    
+    // MARK: - Signed Config Tests
+    
+    @Test
+    func signedConfigVerification() async throws {
+        // Create a private key for signing
+        let privateKey = Curve25519.Signing.PrivateKey()
+        
+        // Create config data
+        let configJSON: [String: Any] = [
+            "settings": [
+                "secureFeature": true,
+                "apiKey": "secret-key-123"
+            ]
+        ]
+        let configData = try JSONSerialization.data(withJSONObject: configJSON)
+        
+        // Sign the config
+        let signature = try privateKey.signature(for: configData)
+        let signedData = try JSONSerialization.data(
+            withJSONObject: [
+                Config.dataKey: configData.base64EncodedString(),
+                Config.signatureKey: signature.base64EncodedString()
+            ],
+            options: [.sortedKeys]
+        )
+        
+        // Write signed config to temporary file
+        let tempDir = FileManager.default.temporaryDirectory
+        let configUrl = tempDir.appendingPathComponent("signed-config-\(UUID().uuidString).json")
+        try signedData.write(to: configUrl)
+        
+        // Create provider with public key
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            publicKey: privateKey.publicKey
+        )
+        
+        let reader = ConfigReader(provider: provider)
+        
+        // Verify the config values are accessible
+        let secureFeature = reader.bool(forKey: "settings.secureFeature", default: false)
+        #expect(secureFeature == true)
+        
+        let apiKey = reader.string(forKey: "settings.apiKey", default: "")
+        #expect(apiKey == "secret-key-123")
+    }
+    
+    @Test
+    func signedConfigWithInvalidSignature() async throws {
+        // Create a private key for signing
+        let privateKey = Curve25519.Signing.PrivateKey()
+        
+        // Create config data
+        let configJSON: [String: Any] = [
+            "settings": [
+                "secureFeature": true
+            ]
+        ]
+        let configData = try JSONSerialization.data(withJSONObject: configJSON)
+        
+        // Sign with one key
+        let signature = try privateKey.signature(for: configData)
+        let signedData = try JSONSerialization.data(
+            withJSONObject: [
+                Config.dataKey: configData.base64EncodedString(),
+                Config.signatureKey: signature.base64EncodedString()
+            ],
+            options: [.sortedKeys]
+        )
+        
+        // Write signed config to temporary file
+        let tempDir = FileManager.default.temporaryDirectory
+        let configUrl = tempDir.appendingPathComponent("invalid-signed-config-\(UUID().uuidString).json")
+        try signedData.write(to: configUrl)
+        
+        // Try to verify with a different public key
+        let otherPrivateKey = Curve25519.Signing.PrivateKey()
+        
+        // Should throw an error during initialization
+        await #expect(throws: ConfigError.invalidSignature) {
+            try await AppRemoteConfigProvider<JSONSnapshot>(
+                url: configUrl,
+                publicKey: otherPrivateKey.publicKey
+            )
+        }
     }
 }

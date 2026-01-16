@@ -1,4 +1,5 @@
 import AppRemoteConfig
+import Crypto
 
 #if canImport(FoundationEssentials)
 import FoundationEssentials
@@ -177,6 +178,9 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     /// Resolution context for configuration. These values are used to resolve overrides and conditions.
     private let resolutionContext: Mutex<ResolutionContext?>
     
+    /// Optional public key for verifying signed configurations.
+    private let publicKey: Curve25519.Signing.PublicKey?
+    
     /// Resolution context structure containing platform, version, and variant information.
     public struct ResolutionContext: Sendable {
         public let platform: Platform
@@ -215,6 +219,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         url: URL,
         pollInterval: Duration = .seconds(15),
         resolutionContext: ResolutionContext? = nil,
+        publicKey: Curve25519.Signing.PublicKey? = nil,
         logger: Logger = Logger(label: "AppRemoteConfigProvider"),
         metrics: any MetricsFactory = MetricsSystem.factory
     ) async throws {
@@ -222,6 +227,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         self.url = url
         self.pollInterval = pollInterval
         self.resolutionContext = .init(resolutionContext)
+        self.publicKey = publicKey
         self.providerName = "AppRemoteConfigProvider<\(Snapshot.self)>"
 
         // Set up the logger with metadata
@@ -241,18 +247,42 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         // Perform initial load
         logger.debug("Performing initial file load")
         let timestamp = Date()
-        let data = try Data(contentsOf: url)
-        let initialSnapshot = try snapshotType.init(
-            data: data.bytes,
-            providerName: providerName,
-            parsingOptions: parsingOptions
-        )
+        let loadedData = try Data(contentsOf: url)
+        
+        // If public key is provided, verify signature and extract the actual config data
+        let (actualConfigData, initialSnapshot): (Data, Snapshot)
+        if let publicKey = publicKey {
+            // Verify and extract signed config
+            let _ = try Config(data: loadedData, publicKey: publicKey) // Verify signature
+            
+            // Extract the actual config data from the signed wrapper
+            guard let json = try JSONSerialization.jsonObject(with: loadedData, options: []) as? [String: Any],
+                  let encodedConfigData = json[Config.dataKey] as? String,
+                  let configData = Data(base64Encoded: encodedConfigData) else {
+                throw ConfigError.base64DecodingFailed
+            }
+            let snapshot = try snapshotType.init(
+                data: configData.bytes,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            actualConfigData = configData
+            initialSnapshot = snapshot
+        } else {
+            let snapshot = try snapshotType.init(
+                data: loadedData.bytes,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            actualConfigData = loadedData
+            initialSnapshot = snapshot
+        }
 
-        // Initialize storage
+        // Initialize storage with the actual config data (unwrapped if signed)
         self.storage = .init(
             .init(
                 snapshot: initialSnapshot,
-                rawData: data,
+                rawData: actualConfigData,
                 lastModifiedTimestamp: timestamp,
                 url: url,
                 valueWatchers: [:],
@@ -261,14 +291,14 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         )
 
         // Update initial metrics
-        self.metrics.fileSize.record(data.count)
+        self.metrics.fileSize.record(actualConfigData.count)
 
         logger.debug(
             "Successfully initialized reloading app remote config provider",
             metadata: [
                 "\(providerName).url": .string(url.absoluteString),
                 "\(providerName).initialTimestamp": .stringConvertible(timestamp.formatted(.iso8601)),
-                "\(providerName).fileSize": .stringConvertible(data.count),
+                "\(providerName).fileSize": .stringConvertible(actualConfigData.count),
             ]
         )
     }
@@ -277,7 +307,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     ///
     /// ## Configuration keys
     /// - `url` (string, required): The URL to the configuration file to monitor.
-    /// - `publicKey` (string, optional): The public key with which the configuration file is signed.
+    /// - `publicKey` (string, optional): Base64-encoded Curve25519 public key for verifying signed configurations.
     /// - `minimumRefreshIntervalSeconds` (int, optional, default: 15): How often to check for file changes in seconds.
     /// - `automaticRefreshIntervalSeconds` (int, optional, default: 15): How often to check for file changes in seconds.
     ///
@@ -286,6 +316,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     ///   - parsingOptions: Options used by the snapshot to parse the file data.
     ///   - config: A configuration reader that contains the required configuration keys.
     ///   - resolutionContext: An optional context for resolving configuration based on platform, version, variant, language.
+    ///   - publicKey: Optional Curve25519 public key for verifying signed configurations. If provided via config reader, this parameter takes precedence.
     ///   - logger: The logger instance to use for this provider.
     ///   - metrics: The metrics factory to use for monitoring provider performance.
     /// - Throws: If required configuration keys are missing, if the file cannot be read, or if snapshot creation fails.
@@ -294,15 +325,28 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         parsingOptions: Snapshot.ParsingOptions = .default,
         config: ConfigReader,
         resolutionContext: ResolutionContext? = nil,
+        publicKey: Curve25519.Signing.PublicKey? = nil,
         logger: Logger = Logger(label: "AppRemoteConfigProvider"),
         metrics: any MetricsFactory = MetricsSystem.factory
     ) async throws {
+        // Try to load public key from config if not provided directly
+        let effectivePublicKey: Curve25519.Signing.PublicKey?
+        if let publicKey = publicKey {
+            effectivePublicKey = publicKey
+        } else if let publicKeyString = config.string(forKey: "publicKey"),
+                  let publicKeyData = Data(base64Encoded: publicKeyString) {
+            effectivePublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+        } else {
+            effectivePublicKey = nil
+        }
+        
         try await self.init(
             snapshotType: snapshotType,
             parsingOptions: parsingOptions,
             url: config.requiredString(forKey: "url", as: URL.self),
             pollInterval: Duration.seconds(config.int(forKey: "pollIntervalSeconds", default: 15)),
             resolutionContext: resolutionContext,
+            publicKey: effectivePublicKey,
             logger: logger,
             metrics: metrics
         )
@@ -401,15 +445,20 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 return cached
             }
             
-            // Parse the raw data into JSON
-            guard let json = try JSONSerialization.jsonObject(with: storage.rawData, options: []) as? [String: Sendable] else {
-                // Fall back to raw settings if parsing fails
-                let config = try Config(data: storage.rawData)
-                return config.settings
+            // Create Config from raw data, verifying signature if public key is provided
+            let config: Config
+            if let publicKey = self.publicKey {
+                // Verify signed config
+                config = try Config(data: storage.rawData, publicKey: publicKey)
+            } else {
+                // Parse unsigned config
+                guard let json = try JSONSerialization.jsonObject(with: storage.rawData, options: []) as? [String: Sendable] else {
+                    // Fall back to raw settings if parsing fails
+                    let fallbackConfig = try Config(data: storage.rawData)
+                    return fallbackConfig.settings
+                }
+                config = try Config(json: json)
             }
-            
-            // Create Config and resolve it
-            let config = try Config(json: json)
             let resolvedSettings = config.resolve(
                 date: now,
                 platform: platform,
@@ -517,12 +566,36 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         )
 
         // Load new data outside the lock
-        let data = try Data(contentsOf: url) // fileSystem.fileContents(atPath: candidateRealPath)
-        let newSnapshot = try Snapshot.init(
-            data: data.bytes,
-            providerName: providerName,
-            parsingOptions: parsingOptions
-        )
+        let loadedData = try Data(contentsOf: url)
+        
+        // If public key is provided, verify and extract signed config
+        let (actualData, newSnapshot): (Data, Snapshot)
+        if let publicKey = self.publicKey {
+            // Verify signed config
+            let _ = try Config(data: loadedData, publicKey: publicKey)
+            
+            // Extract actual config data
+            guard let json = try JSONSerialization.jsonObject(with: loadedData, options: []) as? [String: Any],
+                  let encodedConfigData = json[Config.dataKey] as? String,
+                  let configData = Data(base64Encoded: encodedConfigData) else {
+                throw ConfigError.base64DecodingFailed
+            }
+            let snapshot = try Snapshot.init(
+                data: configData.bytes,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            actualData = configData
+            newSnapshot = snapshot
+        } else {
+            let snapshot = try Snapshot.init(
+                data: loadedData.bytes,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            actualData = loadedData
+            newSnapshot = snapshot
+        }
 
         typealias ValueWatchers = [(
             AbsoluteConfigKey,
@@ -542,7 +615,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
 
                     // Update storage with new data
                     storage.snapshot = newSnapshot
-                    storage.rawData = data
+                    storage.rawData = actualData
                     storage.lastModifiedTimestamp = candidateTimestamp
                     storage.url = candidateRealPath
 
@@ -550,14 +623,14 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                         "Successfully reloaded file",
                         metadata: [
                             "\(providerName).timestamp": .stringConvertible(candidateTimestamp.formatted(.iso8601)),
-                            "\(providerName).fileSize": .stringConvertible(data.count),
+                            "\(providerName).fileSize": .stringConvertible(actualData.count),
                             "\(providerName).realPath": .string(candidateRealPath.absoluteString),
                         ]
                     )
 
                     // Update metrics
                     metrics.reloadCounter.increment(by: 1)
-                    metrics.fileSize.record(data.count)
+                    metrics.fileSize.record(actualData.count)
                     metrics.watcherCount.record(storage.totalWatcherCount)
 
                     // Collect watchers to potentially notify outside the lock
