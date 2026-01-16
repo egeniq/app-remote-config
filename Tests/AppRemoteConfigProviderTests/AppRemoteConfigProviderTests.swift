@@ -1,8 +1,8 @@
-import XCTest
+import Testing
 import Foundation
 @testable import AppRemoteConfigProvider
 
-final class AppRemoteConfigProviderTests: XCTestCase {
+struct AppRemoteConfigProviderTests {
     
     
 }

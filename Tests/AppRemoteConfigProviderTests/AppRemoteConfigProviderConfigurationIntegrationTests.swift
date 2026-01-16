@@ -1,11 +1,11 @@
-import XCTest
+import Testing
 import Foundation
 import Configuration
 @testable import AppRemoteConfigProvider
 @testable import AppRemoteConfig
 
 /// Tests for AppRemoteConfigProvider's swift-configuration Provider integration.
-final class AppRemoteConfigProviderConfigurationIntegrationTests: XCTestCase {
+struct AppRemoteConfigProviderConfigurationIntegrationTests {
     
     // MARK: - Helper Methods
     
@@ -69,19 +69,19 @@ final class AppRemoteConfigProviderConfigurationIntegrationTests: XCTestCase {
     
     // MARK: - Basic Provider Tests
     
-    func testProviderInitializationWithoutContext() async throws {
+    @Test
+    func providerInitializationWithoutContext() async throws {
         let configUrl = try createTestConfigFile()
         defer { try? FileManager.default.removeItem(at: configUrl) }
         
-        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+        let _ = try await AppRemoteConfigProvider<JSONSnapshot>(
             url: configUrl,
             pollInterval: .seconds(60)
         )
-        
-        XCTAssertNotNil(provider)
     }
     
-    func testProviderInitializationWithContext() async throws {
+    @Test
+    func providerInitializationWithContext() async throws {
         let configUrl = try createTestConfigFile()
         defer { try? FileManager.default.removeItem(at: configUrl) }
         
@@ -94,18 +94,17 @@ final class AppRemoteConfigProviderConfigurationIntegrationTests: XCTestCase {
             language: nil
         )
         
-        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+        let _ = try await AppRemoteConfigProvider<JSONSnapshot>(
             url: configUrl,
             pollInterval: .seconds(60),
             resolutionContext: context
         )
-        
-        XCTAssertNotNil(provider)
     }
     
     // MARK: - Value Resolution Tests
     
-    func testValueResolutionWithContext() async throws {
+    @Test
+    func valueResolutionWithContext() async throws {
         let configUrl = try createTestConfigFile()
         defer { try? FileManager.default.removeItem(at: configUrl) }
         
@@ -125,12 +124,13 @@ final class AppRemoteConfigProviderConfigurationIntegrationTests: XCTestCase {
         )
         
         // Verify context was set
-        XCTAssertNotNil(provider.getResolutionContext())
-        XCTAssertEqual(provider.getResolutionContext()?.platform, .iOS)
-        XCTAssertEqual(provider.getResolutionContext()?.buildVariant, .release)
+        #expect(provider.getResolutionContext() != nil)
+        #expect(provider.getResolutionContext()?.platform == .iOS)
+        #expect(provider.getResolutionContext()?.buildVariant == .release)
     }
     
-    func testNestedKeyPathResolution() async throws {
+    @Test
+    func nestedKeyPathResolution() async throws {
         let configUrl = try createTestConfigFile()
         defer { try? FileManager.default.removeItem(at: configUrl) }
         
@@ -159,14 +159,15 @@ final class AppRemoteConfigProviderConfigurationIntegrationTests: XCTestCase {
         let timeout = reader.int(forKey: "settings.timeout", default: 0)
         
         // Values should be readable (actual values depend on config structure)
-        XCTAssertNotNil(featureValue)
-        XCTAssertNotNil(apiEndpoint)
-        XCTAssertNotNil(timeout)
+        #expect(featureValue != false)
+        #expect(apiEndpoint != "")
+        #expect(timeout != 0)
     }
     
     // MARK: - ConfigReader Integration Tests
     
-    func testConfigReaderIntegration() async throws {
+    @Test
+    func configReaderIntegration() async throws {
         let configUrl = try createTestConfigFile()
         defer { try? FileManager.default.removeItem(at: configUrl) }
         
@@ -190,25 +191,12 @@ final class AppRemoteConfigProviderConfigurationIntegrationTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(200))
         
         let featureEnabled = reader.bool(forKey: "settings.features.newUI", default: false)
-        XCTAssertEqual(featureEnabled, true)
+        #expect(featureEnabled == true)
         
         let apiEndpoint = reader.string(forKey: "settings.apiEndpoint", default: "")
-        XCTAssertEqual(apiEndpoint, "https://api.example.com")
+        #expect(apiEndpoint == "https://api.example.com")
         
         let timeout = reader.int(forKey: "settings.timeout", default: 0)
-        XCTAssertEqual(timeout, 30)
-    }
-    
-    // MARK: - Cleanup
-    
-    override func tearDown() {
-        super.tearDown()
-        // Clean up any temporary files
-        let tempDir = FileManager.default.temporaryDirectory
-        try? FileManager.default.contentsOfDirectory(atPath: tempDir.path)
-            .filter { $0.hasPrefix("test-config-") }
-            .forEach { filename in
-                try? FileManager.default.removeItem(at: tempDir.appendingPathComponent(filename))
-            }
+        #expect(timeout == 30)
     }
 }

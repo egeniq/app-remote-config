@@ -1,10 +1,11 @@
-import XCTest
+import Testing
 import Foundation
 @testable import AppRemoteConfig
 
-final class AppRemoteConfigTests: XCTestCase {
+struct AppRemoteConfigTests {
     
-    func testParsing() async throws {
+    @Test
+    func parsing() async throws {
         let jsonString = """
          {
              "settings": {
@@ -81,13 +82,14 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Bool
-        XCTAssertEqual(foo, false)
+        #expect(foo == false)
         
         let bar = settings["bar"] as! String
-        XCTAssertEqual(bar, "hello world")
+        #expect(bar == "hello world")
     }
     
-    func testOverridingWithAppVersion() async throws {
+    @Test
+    func overridingWithAppVersion() async throws {
         let jsonString = """
         {
             "settings": {
@@ -115,10 +117,11 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
-        XCTAssertEqual(foo, 2)
+        #expect(foo == 2)
     }
     
-    func testOverridingWithAppVersionRange() async throws {
+    @Test
+    func overridingWithAppVersionRange() async throws {
         let jsonString = """
         {
             "settings": {
@@ -147,35 +150,36 @@ final class AppRemoteConfigTests: XCTestCase {
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.6.9"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 1)
+            #expect(foo == 1)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.7.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 2)
+            #expect(foo == 2)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.8.123"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 2)
+            #expect(foo == 2)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 2)
+            #expect(foo == 2)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.1"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 1)
+            #expect(foo == 1)
         }
     }
     
-    func testOverridingWithMultipleOverrides() async throws {
+    @Test
+    func overridingWithMultipleOverrides() async throws {
         let jsonString = """
         {
             "settings": {
@@ -214,141 +218,144 @@ final class AppRemoteConfigTests: XCTestCase {
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.6.9"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 1)
+            #expect(foo == 1)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.7.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 2)
+            #expect(foo == 2)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("0.8.123"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 2)
+            #expect(foo == 2)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 3)
+            #expect(foo == 3)
         }
         
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.1"), buildVariant: .release)
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 1)
+            #expect(foo == 1)
         }
     }
     
-    func testVersionParsing() {
+    @Test
+    func versionParsing() {
         do {
             let version = try! Version("1.0.0")
-            XCTAssertEqual(version.rawValue, "1.0.0")
+            #expect(version.rawValue == "1.0.0")
         }
        
         do {
             let version = try! Version("1.0")
-            XCTAssertEqual(version.rawValue, "1.0.0")
+            #expect(version.rawValue == "1.0.0")
         }
         
         do {
             let version = try! Version("1")
-            XCTAssertEqual(version.rawValue, "1.0.0")
+            #expect(version.rawValue == "1.0.0")
         }
         
         do {
             let version = try! Version("1.0.0-test")
-            XCTAssertEqual(version.rawValue, "1.0.0")
+            #expect(version.rawValue == "1.0.0")
         }
         
         do {
             let version = try! Version(" 1.0.0 ")
-            XCTAssertEqual(version.rawValue, "1.0.0")
+            #expect(version.rawValue == "1.0.0")
         }
     }
     
-    func testVersionRangeParsing() {
+    @Test
+    func versionRangeParsing() {
         do {
             let versionRange = try! VersionRange("1.0.0")
-            XCTAssertEqual(versionRange.rawValue, "1.0.0")
-            XCTAssertFalse(versionRange.contains(try! Version("0.9.9")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("1.0.1")))
-            XCTAssertFalse(versionRange.contains(try! Version("1.9.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.1")))
+            #expect(versionRange.rawValue == "1.0.0")
+            #expect(!(versionRange.contains(try! Version("0.9.9"))))
+            #expect(versionRange.contains(try! Version("1.0.0")))
+            #expect(!(versionRange.contains(try! Version("1.0.1"))))
+            #expect(!(versionRange.contains(try! Version("1.9.0"))))
+            #expect(!(versionRange.contains(try! Version("2.0.0"))))
+            #expect(!(versionRange.contains(try! Version("2.0.1"))))
         }
        
         do {
             let versionRange = try! VersionRange("1.0-2.0")
-            XCTAssertEqual(versionRange.rawValue, "1.0.0-2.0.0")
-            XCTAssertFalse(versionRange.contains(try! Version("0.9.9")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.1")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.9.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("2.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.1")))
+            #expect(versionRange.rawValue == "1.0.0-2.0.0")
+            #expect(!(versionRange.contains(try! Version("0.9.9"))))
+            #expect(versionRange.contains(try! Version("1.0.0")))
+            #expect(versionRange.contains(try! Version("1.0.1")))
+            #expect(versionRange.contains(try! Version("1.9.0")))
+            #expect(versionRange.contains(try! Version("2.0.0")))
+            #expect(!(versionRange.contains(try! Version("2.0.1"))))
         }
         
         do {
             let versionRange = try! VersionRange(">1")
-            XCTAssertEqual(versionRange.rawValue, ">1.0.0")
-            XCTAssertFalse(versionRange.contains(try! Version("0.9.9")))
-            XCTAssertFalse(versionRange.contains(try! Version("1.0.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.1")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.9.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("2.0.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("2.0.1")))
+            #expect(versionRange.rawValue == ">1.0.0")
+            #expect(!(versionRange.contains(try! Version("0.9.9"))))
+            #expect(!(versionRange.contains(try! Version("1.0.0"))))
+            #expect(versionRange.contains(try! Version("1.0.1")))
+            #expect(versionRange.contains(try! Version("1.9.0")))
+            #expect(versionRange.contains(try! Version("2.0.0")))
+            #expect(versionRange.contains(try! Version("2.0.1")))
         }
         
         do {
             let versionRange = try! VersionRange("<=1.0.0")
-            XCTAssertEqual(versionRange.rawValue, "<=1.0.0")
-            XCTAssertTrue(versionRange.contains(try! Version("0.9.9")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("1.0.1")))
-            XCTAssertFalse(versionRange.contains(try! Version("1.9.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.1")))
+            #expect(versionRange.rawValue == "<=1.0.0")
+            #expect(versionRange.contains(try! Version("0.9.9")))
+            #expect(versionRange.contains(try! Version("1.0.0")))
+            #expect(!(versionRange.contains(try! Version("1.0.1"))))
+            #expect(!(versionRange.contains(try! Version("1.9.0"))))
+            #expect(!(versionRange.contains(try! Version("2.0.0"))))
+            #expect(!(versionRange.contains(try! Version("2.0.1"))))
         }
         
         do {
             let versionRange = try! VersionRange("1.0.0>-<2.0.0")
-            XCTAssertEqual(versionRange.rawValue, "1.0.0>-<2.0.0")
-            XCTAssertFalse(versionRange.contains(try! Version("0.9.9")))
-            XCTAssertFalse(versionRange.contains(try! Version("1.0.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.1")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.9.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.1")))
+            #expect(versionRange.rawValue == "1.0.0>-<2.0.0")
+            #expect(!(versionRange.contains(try! Version("0.9.9"))))
+            #expect(!(versionRange.contains(try! Version("1.0.0"))))
+            #expect(versionRange.contains(try! Version("1.0.1")))
+            #expect(versionRange.contains(try! Version("1.9.0")))
+            #expect(!(versionRange.contains(try! Version("2.0.0"))))
+            #expect(!(versionRange.contains(try! Version("2.0.1"))))
         }
         
         do {
             let versionRange = try! VersionRange("1.0.0>-2.0.0")
-            XCTAssertEqual(versionRange.rawValue, "1.0.0>-2.0.0")
-            XCTAssertFalse(versionRange.contains(try! Version("0.9.9")))
-            XCTAssertFalse(versionRange.contains(try! Version("1.0.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.1")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.9.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("2.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.1")))
+            #expect(versionRange.rawValue == "1.0.0>-2.0.0")
+            #expect(!(versionRange.contains(try! Version("0.9.9"))))
+            #expect(!(versionRange.contains(try! Version("1.0.0"))))
+            #expect(versionRange.contains(try! Version("1.0.1")))
+            #expect(versionRange.contains(try! Version("1.9.0")))
+            #expect(versionRange.contains(try! Version("2.0.0")))
+            #expect(!(versionRange.contains(try! Version("2.0.1"))))
         }
         
         do {
             let versionRange = try! VersionRange("1.0.0-<2.0.0")
-            XCTAssertEqual(versionRange.rawValue, "1.0.0-<2.0.0")
-            XCTAssertFalse(versionRange.contains(try! Version("0.9.9")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.0")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.0.1")))
-            XCTAssertTrue(versionRange.contains(try! Version("1.9.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.0")))
-            XCTAssertFalse(versionRange.contains(try! Version("2.0.1")))
+            #expect(versionRange.rawValue == "1.0.0-<2.0.0")
+            #expect(!(versionRange.contains(try! Version("0.9.9"))))
+            #expect(versionRange.contains(try! Version("1.0.0")))
+            #expect(versionRange.contains(try! Version("1.0.1")))
+            #expect(versionRange.contains(try! Version("1.9.0")))
+            #expect(!(versionRange.contains(try! Version("2.0.0"))))
+            #expect(!(versionRange.contains(try! Version("2.0.1"))))
         }
     }
     
-    func testNotMatchingWhenUnknownKeysArePresent() async throws {
+    @Test
+    func notMatchingWhenUnknownKeysArePresent() async throws {
         let jsonString = """
         {
             "settings": {
@@ -377,10 +384,11 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
-        XCTAssertEqual(foo, 1)
+        #expect(foo == 1)
     }
     
-    func testRelevantDates() async throws {
+    @Test
+    func relevantDates() async throws {
         let jsonString = """
         {
             "settings": {
@@ -410,13 +418,14 @@ final class AppRemoteConfigTests: XCTestCase {
         let config = try Config(json: json)
         let dates = try config.relevantResolutionDates(platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
        
-        XCTAssertEqual(dates, [
+        #expect(dates == [
             ISO8601DateFormatter().date(from: "2024-08-21T00:00:00Z")!,
             ISO8601DateFormatter().date(from: "2024-09-11T00:00:00Z")!
         ])
     }
 
-    func testRelevantDatesWithOtherZones() async throws {
+    @Test
+    func relevantDatesWithOtherZones() async throws {
         let jsonString = """
         {
             "settings": {
@@ -446,13 +455,14 @@ final class AppRemoteConfigTests: XCTestCase {
         let config = try Config(json: json)
         let dates = try config.relevantResolutionDates(platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
        
-        XCTAssertEqual(dates, [
+        #expect(dates == [
             ISO8601DateFormatter().date(from: "2024-08-20T23:00:00Z")!,
             ISO8601DateFormatter().date(from: "2024-09-11T09:00:00Z")!
         ])
     }
     
-    func testOverridingWithABuildVariant() async throws {
+    @Test
+    func overridingWithABuildVariant() async throws {
         let jsonString = """
         {
             "settings": {
@@ -481,17 +491,18 @@ final class AppRemoteConfigTests: XCTestCase {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .debug)
             
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 2)
+            #expect(foo == 2)
         }
         do {
             let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
             
             let foo = settings["foo"] as! Int
-            XCTAssertEqual(foo, 1)
+            #expect(foo == 1)
         }
     }
     
-    func testOverridingWithAnUnsupportedBuildVariant() async throws {
+    @Test
+    func overridingWithAnUnsupportedBuildVariant() async throws {
         let jsonString = """
         {
             "settings": {
@@ -519,10 +530,11 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
-        XCTAssertEqual(foo, 1)
+        #expect(foo == 1)
     }
 
-    func testOverridingWithInvalidKeys() async throws {
+    @Test
+    func overridingWithInvalidKeys() async throws {
         let jsonString = """
         {
             "settings": {
@@ -551,10 +563,11 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
-        XCTAssertEqual(foo, 1)
+        #expect(foo == 1)
     }
 
-    func testOverridingWithUnknownPlatform() async throws {
+    @Test
+    func overridingWithUnknownPlatform() async throws {
         let jsonString = """
         {
             "settings": {
@@ -582,10 +595,11 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
-        XCTAssertEqual(foo, 1)
+        #expect(foo == 1)
     }
 
-    func testOverridingWithUnsupportedKey() async throws {
+    @Test
+    func overridingWithUnsupportedKey() async throws {
         let jsonString = """
         {
             "settings": {
@@ -613,11 +627,12 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
-        XCTAssertEqual(foo, 1)
+        #expect(foo == 1)
     }
 
 
-    func testOverridingWithUnsupportedAppVersion() async throws {
+    @Test
+    func overridingWithUnsupportedAppVersion() async throws {
         let jsonString = """
         {
             "settings": {
@@ -645,6 +660,6 @@ final class AppRemoteConfigTests: XCTestCase {
         let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
         
         let foo = settings["foo"] as! Int
-        XCTAssertEqual(foo, 1)
+        #expect(foo == 1)
     }
 }
