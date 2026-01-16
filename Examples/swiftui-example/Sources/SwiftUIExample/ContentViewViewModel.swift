@@ -15,10 +15,30 @@ class ContentViewViewModel: ObservableObject {
     @Published var isRefreshing: Bool = false
     
     private let provider: AppRemoteConfigProvider<JSONSnapshot>
+    private var snapshotWatcherTask: Task<Void, Never>?
     
     init(provider: AppRemoteConfigProvider<JSONSnapshot>) {
         self.provider = provider
         loadConfiguration()
+        startWatchingSnapshot()
+    }
+    
+    /// Watch the snapshot for changes and reload when it updates
+    private func startWatchingSnapshot() {
+        snapshotWatcherTask = Task {
+            do {
+                try await provider.watchSnapshot { @Sendable updates in
+                    for await _ in updates {
+                        // Snapshot changed, reload configuration
+                        await MainActor.run {
+                            self.loadConfiguration()
+                        }
+                    }
+                }
+            } catch {
+                print("Error watching snapshot: \(error)")
+            }
+        }
     }
     
     /// Load all configuration values from the provider
@@ -46,5 +66,9 @@ class ContentViewViewModel: ObservableObject {
         } catch {
             print("Failed to refresh configuration: \(error)")
         }
+    }
+    
+    deinit {
+        snapshotWatcherTask?.cancel()
     }
 }

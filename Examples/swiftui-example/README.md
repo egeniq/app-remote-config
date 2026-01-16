@@ -289,7 +289,70 @@ This ensures users always get the latest configuration when:
 
 The refresh respects the `minimumRefreshInterval` to avoid excessive API calls.
 
-### 4. Reading Configuration Values
+### 4. Scheduled Overrides
+
+The example includes a scheduled override that automatically activates the "New UI" feature 15 seconds after the app launches. This demonstrates time-based feature rollouts without needing file changes or manual refresh:
+
+**Base Configuration:**
+```json
+"features": {
+  "newUI": false  // Initially disabled
+}
+```
+
+**Scheduled Override (applied after 15 seconds):**
+```json
+{
+  "schedule": {
+    "from": "<ISO8601 timestamp 15 seconds from startup>"
+  },
+  "settings": {
+    "features": {
+      "newUI": true  // Automatically enabled
+    }
+  }
+}
+```
+
+**How It Works:**
+1. App starts with `newUI = false`
+2. Provider calculates next resolution date based on schedules
+3. At the scheduled time, provider automatically re-resolves configuration
+4. Snapshot is updated and watchers are notified
+5. View model observes changes via `watchSnapshot()` and updates UI
+6. "New UI" feature automatically appears without app restart
+
+This is useful for:
+- Time-based feature rollouts
+- A/B testing with time windows
+- Scheduled maintenance windows
+- Gradual feature enablement
+
+### 5. Snapshot Watching
+
+The view model automatically watches the configuration snapshot for changes and updates the UI:
+
+```swift
+private func startWatchingSnapshot() {
+    snapshotWatcherTask = Task {
+        try await provider.watchSnapshot { @Sendable updates in
+            for await _ in updates {
+                // Snapshot changed, reload configuration
+                await MainActor.run {
+                    self.loadConfiguration()
+                }
+            }
+        }
+    }
+}
+```
+
+This enables:
+- Automatic UI updates when configuration changes
+- Scheduled override activation without polling
+- Real-time response to configuration updates
+
+### 6. Reading Configuration Values
 ```swift
 // Access provider through ConfigReader
 let reader = ConfigReader(provider: provider)
