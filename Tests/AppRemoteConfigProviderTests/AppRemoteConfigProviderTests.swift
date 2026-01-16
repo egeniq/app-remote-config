@@ -198,7 +198,8 @@ struct AppRemoteConfigProviderTests {
             "settings": [
                 "secureFeature": true,
                 "apiKey": "secret-key-123"
-            ]
+            ],
+            "overrides": []
         ]
         let configData = try JSONSerialization.data(withJSONObject: configJSON)
         
@@ -216,6 +217,7 @@ struct AppRemoteConfigProviderTests {
         let tempDir = FileManager.default.temporaryDirectory
         let configUrl = tempDir.appendingPathComponent("signed-config-\(UUID().uuidString).json")
         try signedData.write(to: configUrl)
+        defer { try? FileManager.default.removeItem(at: configUrl) }
         
         let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
             platform: .iOS,
@@ -229,11 +231,14 @@ struct AppRemoteConfigProviderTests {
         // Create provider with public key
         let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
             url: configUrl,
+            pollInterval: .seconds(60),
             resolutionContext: context,
             publicKey: privateKey.publicKey
         )
         
         let reader = ConfigReader(provider: provider)
+        
+        try await Task.sleep(for: .milliseconds(200))
         
         // Verify the config values are accessible
         let secureFeature = reader.bool(forKey: "secureFeature", default: false)
@@ -252,7 +257,8 @@ struct AppRemoteConfigProviderTests {
         let configJSON: [String: Any] = [
             "settings": [
                 "secureFeature": true
-            ]
+            ],
+            "overrides": []
         ]
         let configData = try JSONSerialization.data(withJSONObject: configJSON)
         

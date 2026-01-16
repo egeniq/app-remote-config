@@ -283,6 +283,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 providerName: providerName,
                 parsingOptions: parsingOptions
             )
+            // Store the decoded config data, not the signed wrapper
             actualConfigData = configData
             initialSnapshot = snapshot
         } else {
@@ -664,20 +665,16 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 return cached
             }
             
-            // Create Config from raw data, verifying signature if public key is provided
+            // Create Config from raw data
             let config: Config
-            if let publicKey = self.publicKey {
-                // Verify signed config
-                config = try Config(data: storage.rawData, publicKey: publicKey)
-            } else {
-                // Parse unsigned config
-                guard let json = try JSONSerialization.jsonObject(with: storage.rawData, options: []) as? [String: Sendable] else {
-                    // Fall back to raw settings if parsing fails
-                    let fallbackConfig = try Config(data: storage.rawData)
-                    return fallbackConfig.settings
-                }
-                config = try Config(json: json)
+            // For signed configs, storage.rawData contains the decoded (unsigned) config data,
+            // so we parse it directly. For unsigned configs, we parse the raw data.
+            guard let json = try JSONSerialization.jsonObject(with: storage.rawData, options: []) as? [String: Sendable] else {
+                // Fall back to raw settings if parsing fails
+                let fallbackConfig = try Config(data: storage.rawData)
+                return fallbackConfig.settings
             }
+            config = try Config(json: json)
             let resolvedSettings = config.resolve(
                 date: now,
                 platform: platform,
