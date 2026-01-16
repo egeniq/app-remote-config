@@ -7,7 +7,7 @@ import FoundationEssentials
 import Foundation
 #endif
 
-public import SystemPackage
+import SystemPackage
 public import ServiceLifecycle
 public import Logging
 public import Metrics

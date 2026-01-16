@@ -47,9 +47,9 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/swiftlang/swift-syntax", "509.0.0"..<"603.0.0"),
 
-
-            .package(url: "https://github.com/apple/swift-system", from: "1.5.0"),
-            .package(url: "https://github.com/apple/swift-collections", from: "1.3.0"),
+//
+//            .package(url: "https://github.com/apple/swift-system", from: "1.5.0"),
+//            .package(url: "https://github.com/apple/swift-collections", from: "1.3.0"),
             .package(url: "https://github.com/swift-server/swift-service-lifecycle", from: "2.7.0"),
             .package(url: "https://github.com/apple/swift-log", from: "1.6.3"),
             .package(url: "https://github.com/apple/swift-metrics", from: "2.7.0"),
