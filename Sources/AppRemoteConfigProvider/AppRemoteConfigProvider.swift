@@ -43,13 +43,15 @@ public import Configuration
 ///
 /// // Use with ConfigReader
 /// let reader = ConfigReader(provider: configProvider)
-/// let featureEnabled = reader.bool(forKey: "settings.features.newUI", default: false)
+/// let featureEnabled = reader.bool(forKey: "features.newUI", default: false)
 /// ```
 ///
 /// ## Key Path Format
 ///
-/// Configuration keys use dot-separated nested paths:
-/// - `"settings.feature.enabled"` maps to `config.settings["feature"]["enabled"]`
+/// Configuration keys use dot-separated nested paths. The provider automatically
+/// accesses values within the config's `settings` dictionary, so you don't need to
+/// prefix keys with "settings.":
+/// - `"feature.enabled"` maps to `config.settings["feature"]["enabled"]`
 /// - Intermediate keys must be dictionaries for the path to resolve
 /// - Missing intermediate keys return nil, falling back to cached values
 ///
@@ -759,36 +761,58 @@ extension AppRemoteConfigProvider: CustomDebugStringConvertible {
 extension AppRemoteConfigProvider: ConfigProvider {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     
-    /// Resolves a nested configuration key using the stored resolution context if available.
-    ///
-    /// This method:
-    /// 1. Uses the stored resolution context (platform, version, variant, etc.)
-    /// 2. Resolves the AppRemoteConfig using conditions and schedules
-    /// 3. Returns the resolved value or nil if no context
-    ///
-    /// - Parameters:
-    ///   - keyPath: A dot-separated key path (e.g., "settings.feature.enabled")
-    /// - Returns: The resolved value or nil if not found
-    private func resolveNestedValue(_ keyPath: String) throws -> Sendable? {
-        guard let context = getResolutionContext() else {
-            return nil
+    public func value(forKey key: AbsoluteConfigKey, type: ConfigType) throws -> LookupResult {
+        let keyString = key.description
+        
+        // If we have a resolution context, use resolved settings directly
+        if let context = getResolutionContext() {
+            let settings = try resolveOnce(
+                platform: context.platform,
+                platformVersion: context.platformVersion,
+                appVersion: context.appVersion,
+                variant: context.variant,
+                buildVariant: context.buildVariant,
+                language: context.language
+            )
+            
+            let value = extractValue(from: settings, keyPath: keyString)
+            let configValue = value.map { sendableToConfigValue($0) }
+            return LookupResult(encodedKey: keyString, value: configValue)
         }
         
-        let settings = try resolveOnce(
-            platform: context.platform,
-            platformVersion: context.platformVersion,
-            appVersion: context.appVersion,
-            variant: context.variant,
-            buildVariant: context.buildVariant,
-            language: context.language
-        )
-        
-        return extractValue(from: settings, keyPath: keyPath)
+        // Without resolution context, access snapshot with "settings." prefix
+        let prefixedKey = AbsoluteConfigKey(stringLiteral: "settings.\(keyString)")
+        return try storage.withLock { storage in
+            try storage.snapshot.value(forKey: prefixedKey, type: type)
+        }
     }
     
-    public func value(forKey key: AbsoluteConfigKey, type: ConfigType) throws -> LookupResult {
-        try storage.withLock { storage in
-            try storage.snapshot.value(forKey: key, type: type)
+    /// Converts a Sendable value to ConfigValue
+    private func sendableToConfigValue(_ value: Sendable) -> ConfigValue {
+        switch value {
+        case let str as String:
+            return ConfigValue(.string(str), isSecret: false)
+        case let int as Int:
+            return ConfigValue(.int(int), isSecret: false)
+        case let double as Double:
+            return ConfigValue(.double(double), isSecret: false)
+        case let bool as Bool:
+            return ConfigValue(.bool(bool), isSecret: false)
+        case let array as [String]:
+            return ConfigValue(.stringArray(array), isSecret: false)
+        case let array as [Int]:
+            return ConfigValue(.intArray(array), isSecret: false)
+        case let array as [Double]:
+            return ConfigValue(.doubleArray(array), isSecret: false)
+        case let dict as [String: Sendable]:
+            // For nested dictionaries, convert to string representation
+            if let jsonData = try? JSONSerialization.data(withJSONObject: dict, options: []),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                return ConfigValue(.string(jsonString), isSecret: false)
+            }
+            return ConfigValue(.string("\(dict)"), isSecret: false)
+        default:
+            return ConfigValue(.string("\(value)"), isSecret: false)
         }
     }
 
@@ -806,21 +830,35 @@ extension AppRemoteConfigProvider: ConfigProvider {
         type: Configuration.ConfigType,
         updatesHandler: nonisolated(nonsending) (Configuration.ConfigUpdatesAsyncSequence<Result<Configuration.LookupResult, any Error>, Never>) async throws -> Return
     ) async throws -> Return where Return : ~Copyable {
+        let keyString = key.description
+        
+        // Determine which key to use for watching based on resolution context
+        let watchKey: AbsoluteConfigKey
+        if getResolutionContext() != nil {
+            // Use original key for resolved values
+            watchKey = key
+        } else {
+            // Use prefixed key for snapshot access
+            watchKey = AbsoluteConfigKey(stringLiteral: "settings.\(keyString)")
+        }
+        
         let (stream, continuation) = AsyncStream<Result<LookupResult, any Error>>
             .makeStream(bufferingPolicy: .bufferingNewest(1))
         let id = UUID()
 
         // Add watcher and get initial value
-        let initialValue: Result<LookupResult, any Error> = storage.withLock { storage in
-            storage.valueWatchers[key, default: [:]][id] = continuation
-            metrics.watcherCount.record(storage.totalWatcherCount)
-            return .init {
-                try storage.snapshot.value(forKey: key, type: type)
-            }
+        let initialValue: Result<LookupResult, any Error> = .init {
+            try value(forKey: key, type: type)
         }
+        
+        storage.withLock { storage in
+            storage.valueWatchers[watchKey, default: [:]][id] = continuation
+            metrics.watcherCount.record(storage.totalWatcherCount)
+        }
+        
         defer {
             storage.withLock { storage in
-                storage.valueWatchers[key, default: [:]][id] = nil
+                storage.valueWatchers[watchKey, default: [:]][id] = nil
                 metrics.watcherCount.record(storage.totalWatcherCount)
             }
         }
@@ -903,8 +941,3 @@ extension AppRemoteConfigProvider: Service {
         }
     }
 }
-
-// MARK: - Configuration Provider Conformance
-
-/// This allows using AppRemoteConfigProvider with swift-configuration's ConfigReader.
-/// The provider gives access to the snapshot values directly through the ConfigProvider protocol.

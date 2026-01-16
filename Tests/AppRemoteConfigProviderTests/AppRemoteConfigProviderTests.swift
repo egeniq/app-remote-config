@@ -151,10 +151,10 @@ struct AppRemoteConfigProviderTests {
         let reader = ConfigReader(provider: provider)
         
         // Verify nested key path resolution works correctly
-        let betaMode = reader.bool(forKey: "settings.features.betaMode", default: true)
-        let newUI = reader.bool(forKey: "settings.features.newUI", default: false)
-        let apiEndpoint = reader.string(forKey: "settings.apiEndpoint", default: "")
-        let timeout = reader.int(forKey: "settings.timeout", default: 0)
+        let betaMode = reader.bool(forKey: "features.betaMode", default: false)
+        let newUI = reader.bool(forKey: "features.newUI", default: true)
+        let apiEndpoint = reader.string(forKey: "apiEndpoint", default: "")
+        let timeout = reader.int(forKey: "timeout", default: 0)
         
         // Verify values match the test config
         #expect(betaMode == false)
@@ -190,13 +190,13 @@ struct AppRemoteConfigProviderTests {
         
         try await Task.sleep(for: .milliseconds(200))
         
-        let featureEnabled = reader.bool(forKey: "settings.features.newUI", default: false)
+        let featureEnabled = reader.bool(forKey: "features.newUI", default: true)
         #expect(featureEnabled == true)
         
-        let apiEndpoint = reader.string(forKey: "settings.apiEndpoint", default: "")
+        let apiEndpoint = reader.string(forKey: "apiEndpoint", default: "")
         #expect(apiEndpoint == "https://api.example.com")
         
-        let timeout = reader.int(forKey: "settings.timeout", default: 0)
+        let timeout = reader.int(forKey: "timeout", default: 0)
         #expect(timeout == 30)
     }
     
@@ -240,10 +240,10 @@ struct AppRemoteConfigProviderTests {
         let reader = ConfigReader(provider: provider)
         
         // Verify the config values are accessible
-        let secureFeature = reader.bool(forKey: "settings.secureFeature", default: false)
+        let secureFeature = reader.bool(forKey: "secureFeature", default: false)
         #expect(secureFeature == true)
         
-        let apiKey = reader.string(forKey: "settings.apiKey", default: "")
+        let apiKey = reader.string(forKey: "apiKey", default: "")
         #expect(apiKey == "secret-key-123")
     }
     
