@@ -99,7 +99,7 @@ public import Configuration
 /// ```
 ///
 /// This expects a `url` key in the configuration that specifies the URL to the file.
-/// For a full list of configuration keys, check out ``RemoteFileProvider/init(snapshotType:parsingOptions:config:)``.
+/// For a full list of configuration keys, check out ``AppRemoteConfigProvider/init``.
 ///
 public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendable {
 

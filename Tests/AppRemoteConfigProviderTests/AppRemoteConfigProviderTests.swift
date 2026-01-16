@@ -330,7 +330,7 @@ struct AppRemoteConfigProviderTests {
         #expect(reader.int(forKey: "dictionary.three", default: 0) == 3)
     }
     
-    /// Tests boolean edge cases, particularly handling of NSNumber representation in JSON.
+    /// Tests boolean edge cases.
     @Test
     func booleanEdgeCases() async throws {
         let tempDir = FileManager.default.temporaryDirectory
