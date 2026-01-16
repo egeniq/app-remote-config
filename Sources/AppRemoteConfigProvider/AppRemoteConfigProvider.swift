@@ -122,6 +122,9 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
 
         /// Last modified timestamp of the resolved file.
         var lastModifiedTimestamp: Date
+        
+        /// Last refresh attempt timestamp for minimum refresh interval enforcement.
+        var lastRefreshTimestamp: Date
 
         /// The URL of the configuration file.
         var url: URL
@@ -169,8 +172,11 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     /// The URL of the configuration file to monitor.
     private let url: URL
 
-    /// The interval between polling checks.
-    private let pollInterval: Duration
+    /// The interval between polling checks. If nil, automatic polling is disabled.
+    private let pollInterval: Duration?
+    
+    /// Minimum interval between refresh attempts to prevent excessive network requests.
+    private let minimumRefreshInterval: Duration
 
     /// The human-readable name of the provider.
     public let providerName: String
@@ -217,7 +223,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         snapshotType: Snapshot.Type = Snapshot.self,
         parsingOptions: Snapshot.ParsingOptions = .default,
         url: URL,
-        pollInterval: Duration = .seconds(15),
+        pollInterval: Duration? = .seconds(3600),
+        minimumRefreshInterval: Duration = .seconds(300),
         resolutionContext: ResolutionContext? = nil,
         publicKey: Curve25519.Signing.PublicKey? = nil,
         logger: Logger = Logger(label: "AppRemoteConfigProvider"),
@@ -226,6 +233,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         self.parsingOptions = parsingOptions
         self.url = url
         self.pollInterval = pollInterval
+        self.minimumRefreshInterval = minimumRefreshInterval
         self.resolutionContext = .init(resolutionContext)
         self.publicKey = publicKey
         self.providerName = "AppRemoteConfigProvider<\(Snapshot.self)>"
@@ -233,8 +241,15 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         // Set up the logger with metadata
         var logger = logger
         logger[metadataKey: "\(providerName).url"] = .string(url.absoluteString)
-        logger[metadataKey: "\(providerName).pollInterval.seconds"] = .string(
-            pollInterval.components.seconds.description
+        if let pollInterval = pollInterval {
+            logger[metadataKey: "\(providerName).pollInterval.seconds"] = .string(
+                pollInterval.components.seconds.description
+            )
+        } else {
+            logger[metadataKey: "\(providerName).pollInterval"] = "disabled"
+        }
+        logger[metadataKey: "\(providerName).minimumRefreshInterval.seconds"] = .string(
+            minimumRefreshInterval.components.seconds.description
         )
         self.logger = logger
 
@@ -284,6 +299,7 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
                 snapshot: initialSnapshot,
                 rawData: actualConfigData,
                 lastModifiedTimestamp: timestamp,
+                lastRefreshTimestamp: timestamp,
                 url: url,
                 valueWatchers: [:],
                 snapshotWatchers: [:]
@@ -308,8 +324,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     /// ## Configuration keys
     /// - `url` (string, required): The URL to the configuration file to monitor.
     /// - `publicKey` (string, optional): Base64-encoded Curve25519 public key for verifying signed configurations.
-    /// - `minimumRefreshIntervalSeconds` (int, optional, default: 15): How often to check for file changes in seconds.
-    /// - `automaticRefreshIntervalSeconds` (int, optional, default: 15): How often to check for file changes in seconds.
+    /// - `pollIntervalSeconds` (int, optional, default: 3600): Automatic polling interval in seconds. Set to 0 to disable polling.
+    /// - `minimumRefreshIntervalSeconds` (int, optional, default: 300): Minimum interval between refresh attempts in seconds.
     ///
     /// - Parameters:
     ///   - snapshotType: The type of snapshot to create from the file contents.
@@ -340,11 +356,16 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             effectivePublicKey = nil
         }
         
+        // Parse poll interval (0 or negative means disabled)
+        let pollIntervalSeconds = config.int(forKey: "pollIntervalSeconds", default: 3600)
+        let effectivePollInterval = pollIntervalSeconds > 0 ? Duration.seconds(pollIntervalSeconds) : nil
+        
         try await self.init(
             snapshotType: snapshotType,
             parsingOptions: parsingOptions,
             url: config.requiredString(forKey: "url", as: URL.self),
-            pollInterval: Duration.seconds(config.int(forKey: "pollIntervalSeconds", default: 15)),
+            pollInterval: effectivePollInterval,
+            minimumRefreshInterval: Duration.seconds(config.int(forKey: "minimumRefreshIntervalSeconds", default: 300)),
             resolutionContext: resolutionContext,
             publicKey: effectivePublicKey,
             logger: logger,
@@ -352,15 +373,211 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         )
     }
 
-    /// Checks if the file has changed and reloads it if necessary.
+    // MARK: - Refresh Methods
+    
+    /// Manually triggers a refresh of the configuration data.
     ///
-    /// This method performs the core file monitoring logic by checking both the file's
-    /// last modified timestamp and its resolved path (in case of symlinks). If changes
-    /// are detected, it reloads the file contents, creates a new snapshot, and notifies
-    /// any active watchers of the changes.
+    /// This method respects the `minimumRefreshInterval` to prevent excessive network requests.
+    /// Use this method when your app comes to the foreground or when you want to ensure
+    /// fresh configuration data.
     ///
-    /// - Parameter logger: The logger to use during the reload operation.
+    /// - Throws: Network errors, parsing errors, or if minimum refresh interval has not elapsed.
+    public func refresh() async throws {
+        try await refreshIfNeeded(logger: logger, force: true)
+    }
+    
+    /// Checks if the file should be refreshed and reloads it if necessary.
+    ///
+    /// This method performs the core file monitoring logic. It checks the minimum refresh
+    /// interval to prevent excessive network requests, then fetches new data, creates a
+    /// new snapshot, and notifies any active watchers of changes.
+    ///
+    /// - Parameters:
+    ///   - logger: The logger to use during the reload operation.
+    ///   - force: If true, bypasses timestamp comparison but still respects minimum refresh interval.
     /// - Throws: File system errors or snapshot creation errors.
+    internal func refreshIfNeeded(logger: Logger, force: Bool = false) async throws {
+        logger.debug("refreshIfNeeded started")
+        defer {
+            logger.debug("refreshIfNeeded finished")
+        }
+
+        let candidateRealPath = url
+        let candidateTimestamp = Date()
+        
+        // Check minimum refresh interval
+        let shouldSkipDueToMinimumInterval = storage.withLock { storage -> Bool in
+            let timeSinceLastRefresh = candidateTimestamp.timeIntervalSince(storage.lastRefreshTimestamp)
+            let minimumInterval = minimumRefreshInterval.components.seconds
+            return timeSinceLastRefresh < Double(minimumInterval)
+        }
+        
+        if shouldSkipDueToMinimumInterval {
+            logger.debug(
+                "Skipping refresh due to minimum refresh interval",
+                metadata: [
+                    "\(providerName).minimumRefreshInterval.seconds": .stringConvertible(minimumRefreshInterval.components.seconds)
+                ]
+            )
+            return
+        }
+
+        guard
+            let (originalTimestamp, originalRealPath) =
+                storage
+                .withLock({ storage -> (Date, URL)? in
+                    let originalTimestamp = storage.lastModifiedTimestamp
+                    let originalRealPath = storage.url
+
+                    // Check if either the real path or timestamp has changed (or force refresh)
+                    guard force || originalRealPath != candidateRealPath || originalTimestamp != candidateTimestamp else {
+                        logger.debug(
+                            "File path and timestamp unchanged, no reload needed",
+                            metadata: [
+                                "\(providerName).timestamp": .stringConvertible(originalTimestamp.formatted(.iso8601)),
+                                "\(providerName).realPath": .string(originalRealPath.absoluteString),
+                            ]
+                        )
+                        return nil
+                    }
+                    return (originalTimestamp, originalRealPath)
+                })
+        else {
+            // No changes detected.
+            return
+        }
+
+        logger.debug(
+            "File path or timestamp changed, reloading...",
+            metadata: [
+                "\(providerName).originalTimestamp": .stringConvertible(originalTimestamp.formatted(.iso8601)),
+                "\(providerName).candidateTimestamp": .stringConvertible(candidateTimestamp.formatted(.iso8601)),
+                "\(providerName).originalRealPath": .string(originalRealPath.absoluteString),
+                "\(providerName).candidateRealPath": .string(candidateRealPath.absoluteString),
+            ]
+        )
+
+        // Load new data outside the lock
+        let (loadedData, _) = try await URLSession.shared.data(from: url)
+        
+        // If public key is provided, verify and extract signed config
+        let (actualData, newSnapshot): (Data, Snapshot)
+        if let publicKey = self.publicKey {
+            // Verify signed config
+            let _ = try Config(data: loadedData, publicKey: publicKey)
+            
+            // Extract actual config data
+            guard let json = try JSONSerialization.jsonObject(with: loadedData, options: []) as? [String: Any],
+                  let encodedConfigData = json[Config.dataKey] as? String,
+                  let configData = Data(base64Encoded: encodedConfigData) else {
+                throw ConfigError.base64DecodingFailed
+            }
+            let snapshot = try Snapshot.init(
+                data: configData.bytes,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            actualData = configData
+            newSnapshot = snapshot
+        } else {
+            let snapshot = try Snapshot.init(
+                data: loadedData.bytes,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            actualData = loadedData
+            newSnapshot = snapshot
+        }
+
+        typealias ValueWatchers = [(
+            AbsoluteConfigKey,
+            Result<LookupResult, any Error>,
+            [AsyncStream<Result<LookupResult, any Error>>.Continuation]
+        )]
+        typealias SnapshotWatchers = (Snapshot, [AsyncStream<Snapshot>.Continuation])
+        guard
+            let (valueWatchersToNotify, snapshotWatchersToNotify) =
+                storage
+                .withLock({ storage -> (ValueWatchers, SnapshotWatchers)? in
+
+                    // Check if we lost the race with another caller
+                    if storage.lastModifiedTimestamp != originalTimestamp || storage.url != originalRealPath {
+                        return nil
+                    }
+
+                    // Update storage with new data
+                    storage.snapshot = newSnapshot
+                    storage.rawData = actualData
+                    storage.lastModifiedTimestamp = candidateTimestamp
+                    storage.lastRefreshTimestamp = candidateTimestamp
+                    storage.url = candidateRealPath
+
+                    logger.debug(
+                        "Successfully reloaded file",
+                        metadata: [
+                            "\(providerName).timestamp": .stringConvertible(candidateTimestamp.formatted(.iso8601)),
+                            "\(providerName).fileSize": .stringConvertible(actualData.count),
+                            "\(providerName).realPath": .string(candidateRealPath.absoluteString),
+                        ]
+                    )
+
+                    // Update metrics
+                    metrics.reloadCounter.increment(by: 1)
+                    metrics.fileSize.record(actualData.count)
+                    metrics.watcherCount.record(storage.totalWatcherCount)
+
+                    // Collect watchers to potentially notify outside the lock
+                    let valueWatchers = storage.valueWatchers.compactMap {
+                        (key, watchers) -> (
+                            AbsoluteConfigKey,
+                            Result<LookupResult, any Error>,
+                            [AsyncStream<Result<LookupResult, any Error>>.Continuation]
+                        )? in
+                        guard !watchers.isEmpty else { return nil }
+
+                        // Get new values using the new snapshot
+                        let newValue = Result { try newSnapshot.value(forKey: key, type: .string) }
+
+                        // Only notify watchers of new value
+                        return (key, newValue, Array(watchers.values))
+                    }
+
+                    let snapshotWatchers = (newSnapshot, Array(storage.snapshotWatchers.values))
+                    return (valueWatchers, snapshotWatchers)
+                })
+        else {
+            logger.debug("Lost race with another caller, not modifying internal state")
+            return
+        }
+
+        // Notify watchers outside the lock
+        let totalWatchers = valueWatchersToNotify.map { $0.2.count }.reduce(0, +) + snapshotWatchersToNotify.1.count
+        guard totalWatchers > 0 else {
+            logger.debug("No watchers to notify")
+            return
+        }
+
+        // Notify value watchers
+        for (_, valueUpdate, watchers) in valueWatchersToNotify {
+            for watcher in watchers {
+                watcher.yield(valueUpdate)
+            }
+        }
+
+        // Notify snapshot watchers
+        for watcher in snapshotWatchersToNotify.1 {
+            watcher.yield(snapshotWatchersToNotify.0)
+        }
+
+        logger.debug(
+            "Notified watchers of file changes",
+            metadata: [
+                "\(providerName).valueWatcherKeys": .array(valueWatchersToNotify.map { .string($0.0.description) }),
+                "\(providerName).snapshotWatcherCount": .stringConvertible(snapshotWatchersToNotify.1.count),
+                "\(providerName).totalWatcherCount": .stringConvertible(totalWatchers),
+            ]
+        )
+    }
 
     // MARK: - Resolution Context Methods
     
@@ -520,171 +737,6 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         
         return current
     }
-
-    internal func reloadIfNeeded(logger: Logger) async throws {
-        logger.debug("reloadIfNeeded started")
-        defer {
-            logger.debug("reloadIfNeeded finished")
-        }
-
-        let candidateRealPath = url
-        let candidateTimestamp = Date()
-
-        guard
-            let (originalTimestamp, originalRealPath) =
-                storage
-                .withLock({ storage -> (Date, URL)? in
-                    let originalTimestamp = storage.lastModifiedTimestamp
-                    let originalRealPath = storage.url
-
-                    // Check if either the real path or timestamp has changed
-                    guard originalRealPath != candidateRealPath || originalTimestamp != candidateTimestamp else {
-                        logger.debug(
-                            "File path and timestamp unchanged, no reload needed",
-                            metadata: [
-                                "\(providerName).timestamp": .stringConvertible(originalTimestamp.formatted(.iso8601)),
-                                "\(providerName).realPath": .string(originalRealPath.absoluteString),
-                            ]
-                        )
-                        return nil
-                    }
-                    return (originalTimestamp, originalRealPath)
-                })
-        else {
-            // No changes detected.
-            return
-        }
-
-        logger.debug(
-            "File path or timestamp changed, reloading...",
-            metadata: [
-                "\(providerName).originalTimestamp": .stringConvertible(originalTimestamp.formatted(.iso8601)),
-                "\(providerName).candidateTimestamp": .stringConvertible(candidateTimestamp.formatted(.iso8601)),
-                "\(providerName).originalRealPath": .string(originalRealPath.absoluteString),
-                "\(providerName).candidateRealPath": .string(candidateRealPath.absoluteString),
-            ]
-        )
-
-        // Load new data outside the lock
-        let (loadedData, _) = try await URLSession.shared.data(from: url)
-        
-        // If public key is provided, verify and extract signed config
-        let (actualData, newSnapshot): (Data, Snapshot)
-        if let publicKey = self.publicKey {
-            // Verify signed config
-            let _ = try Config(data: loadedData, publicKey: publicKey)
-            
-            // Extract actual config data
-            guard let json = try JSONSerialization.jsonObject(with: loadedData, options: []) as? [String: Any],
-                  let encodedConfigData = json[Config.dataKey] as? String,
-                  let configData = Data(base64Encoded: encodedConfigData) else {
-                throw ConfigError.base64DecodingFailed
-            }
-            let snapshot = try Snapshot.init(
-                data: configData.bytes,
-                providerName: providerName,
-                parsingOptions: parsingOptions
-            )
-            actualData = configData
-            newSnapshot = snapshot
-        } else {
-            let snapshot = try Snapshot.init(
-                data: loadedData.bytes,
-                providerName: providerName,
-                parsingOptions: parsingOptions
-            )
-            actualData = loadedData
-            newSnapshot = snapshot
-        }
-
-        typealias ValueWatchers = [(
-            AbsoluteConfigKey,
-            Result<LookupResult, any Error>,
-            [AsyncStream<Result<LookupResult, any Error>>.Continuation]
-        )]
-        typealias SnapshotWatchers = (Snapshot, [AsyncStream<Snapshot>.Continuation])
-        guard
-            let (valueWatchersToNotify, snapshotWatchersToNotify) =
-                storage
-                .withLock({ storage -> (ValueWatchers, SnapshotWatchers)? in
-
-                    // Check if we lost the race with another caller
-                    if storage.lastModifiedTimestamp != originalTimestamp || storage.url != originalRealPath {
-                        return nil
-                    }
-
-                    // Update storage with new data
-                    storage.snapshot = newSnapshot
-                    storage.rawData = actualData
-                    storage.lastModifiedTimestamp = candidateTimestamp
-                    storage.url = candidateRealPath
-
-                    logger.debug(
-                        "Successfully reloaded file",
-                        metadata: [
-                            "\(providerName).timestamp": .stringConvertible(candidateTimestamp.formatted(.iso8601)),
-                            "\(providerName).fileSize": .stringConvertible(actualData.count),
-                            "\(providerName).realPath": .string(candidateRealPath.absoluteString),
-                        ]
-                    )
-
-                    // Update metrics
-                    metrics.reloadCounter.increment(by: 1)
-                    metrics.fileSize.record(actualData.count)
-                    metrics.watcherCount.record(storage.totalWatcherCount)
-
-                    // Collect watchers to potentially notify outside the lock
-                    let valueWatchers = storage.valueWatchers.compactMap {
-                        (key, watchers) -> (
-                            AbsoluteConfigKey,
-                            Result<LookupResult, any Error>,
-                            [AsyncStream<Result<LookupResult, any Error>>.Continuation]
-                        )? in
-                        guard !watchers.isEmpty else { return nil }
-
-                        // Get new values using the new snapshot
-                        let newValue = Result { try newSnapshot.value(forKey: key, type: .string) }
-
-                        // Only notify watchers of new value
-                        return (key, newValue, Array(watchers.values))
-                    }
-
-                    let snapshotWatchers = (newSnapshot, Array(storage.snapshotWatchers.values))
-                    return (valueWatchers, snapshotWatchers)
-                })
-        else {
-            logger.debug("Lost race with another caller, not modifying internal state")
-            return
-        }
-
-        // Notify watchers outside the lock
-        let totalWatchers = valueWatchersToNotify.map { $0.2.count }.reduce(0, +) + snapshotWatchersToNotify.1.count
-        guard totalWatchers > 0 else {
-            logger.debug("No watchers to notify")
-            return
-        }
-
-        // Notify value watchers
-        for (_, valueUpdate, watchers) in valueWatchersToNotify {
-            for watcher in watchers {
-                watcher.yield(valueUpdate)
-            }
-        }
-
-        // Notify snapshot watchers
-        for watcher in snapshotWatchersToNotify.1 {
-            watcher.yield(snapshotWatchersToNotify.0)
-        }
-
-        logger.debug(
-            "Notified watchers of file changes",
-            metadata: [
-                "\(providerName).valueWatcherKeys": .array(valueWatchersToNotify.map { .string($0.0.description) }),
-                "\(providerName).snapshotWatcherCount": .stringConvertible(snapshotWatchersToNotify.1.count),
-                "\(providerName).totalWatcherCount": .stringConvertible(totalWatchers),
-            ]
-        )
-    }
 }
 
 //@available(AppRemoteConfigProvider 1.0, *)
@@ -745,7 +797,7 @@ extension AppRemoteConfigProvider: ConfigProvider {
         forKey key: AbsoluteConfigKey,
         type: ConfigType
     ) async throws -> LookupResult {
-        try await reloadIfNeeded(logger: logger)
+        try await refreshIfNeeded(logger: logger)
         return try value(forKey: key, type: type)
     }
 
@@ -811,6 +863,13 @@ extension AppRemoteConfigProvider: ConfigProvider {
 extension AppRemoteConfigProvider: Service {
     // swift-format-ignore: AllPublicDeclarationsHaveDocumentation
     public func run() async throws {
+        // If polling is disabled, just wait for graceful shutdown
+        guard let pollInterval = pollInterval else {
+            logger.debug("Automatic polling disabled, waiting for graceful shutdown")
+            try await gracefulShutdown()
+            return
+        }
+        
         logger.debug("URL polling starting")
         defer {
             logger.debug("URL polling stopping")
@@ -831,7 +890,7 @@ extension AppRemoteConfigProvider: Service {
             }
 
             do {
-                try await reloadIfNeeded(logger: tickLogger)
+                try await refreshIfNeeded(logger: tickLogger)
             } catch {
                 tickLogger.debug(
                     "Poll tick failed, will retry on next tick",
