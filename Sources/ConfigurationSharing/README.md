@@ -28,7 +28,7 @@ import Sharing
 struct MyApp: App {
     init() {
         prepareDependencies {
-            $0.defaultConfigurationReader.initialize = {
+            $0.defaultConfigurationReader = DefaultConfigurationReader(initialize: {
                 var logger = Logger(label: "com.example.config")
                 logger.logLevel = .debug
                 
@@ -42,7 +42,7 @@ struct MyApp: App {
                 // Return reader, services to manage, and logger
                 // Services will be automatically managed in a ServiceGroup
                 return (ConfigReader(providers: [provider]), [provider], logger)
-            }
+            })
         }
     }
     
@@ -95,9 +95,9 @@ var newUI = false
 struct MyApp: App {
     init() {
         prepareDependencies {
-            $0.defaultConfigurationReader.initialize = {
+            $0.defaultConfigurationReader = DefaultConfigurationReader(initialize: {
                 try await createMyConfigReader()
-            }
+            })
         }
     }
 }
