@@ -184,12 +184,12 @@ extension DependencyValues {
     /// Example:
     /// ```swift
     /// prepareDependencies {
-    ///     $0.defaultConfigurationReader.initialize = {
+    ///     $0.defaultConfigurationReader = DefaultConfigurationReader(initialize: {
     ///         var logger = Logger(label: "com.example.config")
     ///         let provider = try await YourConfigProvider(logger: logger)
     ///         // Pass services that conform to Service for lifecycle management
     ///         return (ConfigReader(providers: [provider]), [provider], logger)
-    ///     }
+    ///     })
     /// }
     /// ```
     public var defaultConfigurationReader: DefaultConfigurationReader {
@@ -207,11 +207,11 @@ private enum DefaultConfigurationReaderKey: DependencyKey {
             Set one in prepareDependencies:
             
                 prepareDependencies {
-                    $0.defaultConfigurationReader.initialize = {
+                    $0.defaultConfigurationReader = DefaultConfigurationReader(initialize: {
                         var logger = Logger(label: "com.app.config")
                         let provider = try await YourConfigProvider(logger: logger)
                         return (ConfigReader(providers: [provider]), [provider], logger)
-                    }
+                    })
                 }
             """
         )
@@ -225,9 +225,9 @@ private enum DefaultConfigurationReaderKey: DependencyKey {
             Provide a test reader:
             
                 withDependencies {
-                    $0.defaultConfigurationReader.initialize = {
+                    $0.defaultConfigurationReader = DefaultConfigurationReader(initialize: {
                         (ConfigReader(providers: []), nil, nil)
-                    }
+                    })
                 } operation: {
                     // Test code here
                 }
