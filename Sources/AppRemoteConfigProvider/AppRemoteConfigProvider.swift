@@ -86,8 +86,36 @@ public import Configuration
 /// try await serviceGroup.run()
 /// ```
 ///
-/// The provider monitors the URL by polling at the specified interval (default: 15 seconds)
-/// and notifies any active watchers when changes are detected or when they are scheduled.
+/// ## Automatic Updates
+///
+/// The provider monitors for configuration changes in two ways:
+///
+/// 1. **Polling**: Periodically checks the URL for file changes at the specified interval (default: 3600 seconds)
+/// 2. **Scheduled Resolution**: Automatically re-evaluates configuration at times specified in override schedules
+///
+/// When the configuration includes scheduled overrides with `from` and `until` timestamps, the provider
+/// automatically schedules timers to re-resolve the configuration at those times. This ensures that
+/// features can activate and deactivate on a schedule without requiring file changes or manual refreshes.
+///
+/// For example:
+/// ```json
+/// "overrides": [
+///   {
+///     "schedule": {
+///       "from": "2026-01-17T16:06:43Z",
+///       "until": "2026-01-17T16:06:53Z"
+///     },
+///     "settings": {
+///       "features": {
+///         "newUI": true
+///       }
+///     }
+///   }
+/// ]
+/// ```
+///
+/// In this example, the `newUI` feature will automatically activate at the "from" time and deactivate at the "until" time.
+/// All watchers are notified when the configuration is re-resolved, so views automatically update.
 ///
 /// ## Configuration from a reader
 ///
