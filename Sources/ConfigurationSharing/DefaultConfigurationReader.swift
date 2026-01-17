@@ -26,20 +26,22 @@ public protocol Refreshable: Sendable {
 /// struct MyApp: App {
 ///     init() {
 ///         prepareDependencies {
-///             $0.defaultConfigurationReader.initialize = {
-///                 var logger = Logger(label: "com.example.config")
-///                 logger.logLevel = .debug
-///                 
-///                 let provider = try await AppRemoteConfigProvider(
-///                     url: configURL,
-///                     pollInterval: .seconds(30),
-///                     resolutionContext: context,
-///                     logger: logger
-///                 )
-///                 
-///                 // Return reader, services to manage, and logger
-///                 return (ConfigReader(providers: [provider]), [provider], logger)
-///             }
+///             $0.defaultConfigurationReader = DefaultConfigurationReader(
+///                 initialize: {
+///                     var logger = Logger(label: "com.example.config")
+///                     logger.logLevel = .debug
+///                     
+///                     let provider = try await AppRemoteConfigProvider(
+///                         url: configURL,
+///                         pollInterval: .seconds(30),
+///                         resolutionContext: context,
+///                         logger: logger
+///                     )
+///                     
+///                     // Return reader, services to manage, and logger
+///                     return (ConfigReader(providers: [provider]), [provider], logger)
+///                 }
+///             )
 ///         }
 ///     }
 ///
@@ -54,40 +56,84 @@ public struct DefaultConfigurationReader: Sendable {
     /// Async initialization function that creates and returns a configuration reader.
     /// Returns a tuple of (ConfigReader, services to manage, optional logger).
     /// If services are provided, they will be managed in a ServiceGroup using the logger.
-    public var initialize: @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)
+    private let initializeImpl: @Sendable () async throws -> (ConfigReader, [any Service]?, Logging.Logger?)
     
     /// Refresh method that can be called to trigger configuration updates.
     /// Providers that conform to the Refreshable protocol will be refreshed.
     /// This is useful when returning from the background to ensure fresh configuration.
     public var refresh: @Sendable () async -> Void
     
-    public init(initialize: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)) {
-        let cache = ReaderCache()
-        self.initialize = {
-            try await cache.getOrInitialize(with: initialize)
+    public init(initialize: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logging.Logger?)) {
+        self.initializeImpl = {
+            try await GlobalReaderCache.shared.getOrInitialize(with: initialize)
         }
         self.refresh = {
-            await cache.refresh()
+            await GlobalReaderCache.shared.refresh()
         }
+    }
+    
+    /// Public async initialization method that uses the wrapped factory
+    public var initialize: @Sendable () async throws -> (ConfigReader, [any Service]?, Logging.Logger?) {
+        get { initializeImpl }
     }
 }
 
-/// Internal actor for managing the initialized ConfigReader and its services.
-private actor ReaderCache {
+/// Internal actor for managing the initialized ConfigReader and its services globally.
+private actor GlobalReaderCache {
+    static let shared = GlobalReaderCache()
     private var cachedReader: ConfigReader?
     private var serviceGroup: ServiceGroup?
     private var services: [any Service]?
+    private var ongoingInitialization: Task<(ConfigReader, [any Service]?, Logging.Logger?), Error>?
     
     func getOrInitialize(
-        with factory: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)
-    ) async throws -> (ConfigReader, [any Service]?, Logger?) {
-        // Return cached reader if available
+        with factory: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logging.Logger?)
+    ) async throws -> (ConfigReader, [any Service]?, Logging.Logger?) {
+        // Fast path: check if already cached (doesn't require actor re-entry for subsequent calls)
         if let cached = cachedReader {
             return (cached, nil, nil)
         }
         
-        // Initialize via factory
-        let (reader, services, logger) = try await factory()
+        // For initialization, we need actor serialization
+        // This returns immediately if initialization is in progress
+        return try await initializeIfNeeded(with: factory)
+    }
+    
+    private func initializeIfNeeded(
+        with factory: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logging.Logger?)
+    ) async throws -> (ConfigReader, [any Service]?, Logging.Logger?) {
+        // Double-check in case another task beat us here
+        if let cached = cachedReader {
+            return (cached, nil, nil)
+        }
+        
+        // If already initializing, wait for that initialization
+        if let existingTask = ongoingInitialization {
+            return try await existingTask.value
+        }
+        
+        // We're the first - start initialization
+        let task = Task<(ConfigReader, [any Service]?, Logging.Logger?), Error> {
+            return try await factory()
+        }
+        
+        ongoingInitialization = task
+        
+        do {
+            let result = try await task.value
+            ongoingInitialization = nil
+            
+            // Store the result
+            storeResult(reader: result.0, services: result.1, logger: result.2)
+            
+            return result
+        } catch {
+            ongoingInitialization = nil
+            throw error
+        }
+    }
+    
+    private func storeResult(reader: ConfigReader, services: [any Service]?, logger: Logging.Logger?) {
         cachedReader = reader
         self.services = services
         
@@ -108,8 +154,6 @@ private actor ReaderCache {
                 }
             }
         }
-        
-        return (reader, services, logger)
     }
     
     func refresh() async {

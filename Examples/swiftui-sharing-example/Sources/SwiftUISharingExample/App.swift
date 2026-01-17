@@ -15,9 +15,9 @@ struct SwiftUISharingExampleApp: App {
     init() {
         // Prepare dependencies early in the app lifecycle with async initialization factory
         prepareDependencies {
-            $0.defaultConfigurationReader.initialize = {
+            $0.defaultConfigurationReader = DefaultConfigurationReader(initialize: {
                 try await Self.createMyConfigReader()
-            }
+            })
         }
     }
     
