@@ -10,23 +10,19 @@ import ServiceLifecycle
 
 @main
 struct SwiftUISharingExampleApp: App {
-    @State private var error: String?
-    @State private var isInitializing: Bool = true
-    @State private var serviceGroup: ServiceGroup?
     @Environment(\.scenePhase) private var scenePhase
     
     init() {
         // Prepare dependencies early in the app lifecycle with async initialization factory
         prepareDependencies {
             $0.defaultConfigurationReader.initialize = {
-                let provider = try await Self.createProvider()
-                return ConfigReader(providers: [provider])
+                try await Self.createMyConfigReader()
             }
         }
     }
     
-    /// Factory method to create the configured AppRemoteConfigProvider
-    private static func createProvider() async throws -> any ConfigProvider {
+    /// Factory method to create the configuration reader with services for lifecycle management
+    private static func createMyConfigReader() async throws -> (ConfigReader, [any Service]?, Logger?) {
         // Step 1: Create an example configuration file
         let configFileURL = try createExampleConfigFile()
         
@@ -69,7 +65,7 @@ struct SwiftUISharingExampleApp: App {
         var logger = Logger(label: "com.example.remoteconfigsharing")
         logger.logLevel = .debug
         
-        // Step 6: Create and return provider
+        // Step 6: Create provider
         let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
             url: configFileURL,
             pollInterval: .seconds(30),
@@ -82,7 +78,9 @@ struct SwiftUISharingExampleApp: App {
         logger.info("Platform: \(platform), OS: \(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)")
         logger.info("App version: \(appVersion), Build variant: \(buildVariant)")
         
-        return provider
+        // Return the reader, services that need lifecycle management, and logger
+        // AppRemoteConfigProvider conforms to Service, so it will be managed automatically
+        return (ConfigReader(providers: [provider]), [provider], logger)
     }
     
     /// Create an example configuration JSON file
@@ -132,81 +130,16 @@ struct SwiftUISharingExampleApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                if let error = error {
-                    ErrorView(message: error)
-                } else if isInitializing {
-                    ProgressView("Initializing Configuration...")
-                        .task {
-                            await initializeProvider()
-                        }
-                } else {
-                    ContentView()
-                }
-            }
-            .onChange(of: scenePhase) { oldPhase, newPhase in
-                if newPhase == .active {
-                    // Refresh configuration when app comes to foreground
-                    Task {
-                        // Configuration will update automatically via @Shared
-                        // Just trigger a manual refresh if needed
-                        if serviceGroup != nil {
-                            // Could add a refresh method here if needed
-                        }
-                    }
+            ContentView()
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                Task {
+                    // Refresh the configuration when app comes to foreground
+                    @Dependency(\.defaultConfigurationReader) var reader
+                    await reader.refresh()
                 }
             }
         }
-    }
-    
-    /// Initialize the AppRemoteConfigProvider using the async-aware dependency
-    private func initializeProvider() async {
-        do {
-            // Step 1: Initialize provider using the dependency factory
-            @Dependency(\.defaultConfigurationReader) var readerFactory
-            let configReader = try await readerFactory.initialize()
-            
-            // Step 2: Get logger for status messages
-            var logger = Logger(label: "com.example.remoteconfigsharing")
-            logger.logLevel = .debug
-            logger.info("Configuration reader ready")
-            
-            // Step 5: Mark initialization complete
-            await MainActor.run {
-                self.isInitializing = false
-            }
-        } catch {
-            await MainActor.run {
-                self.error = "Failed to initialize configuration: \(error.localizedDescription)"
-            }
-        }
-    }
-}
-
-
-/// View shown when initialization fails
-struct ErrorView: View {
-    let message: String
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.largeTitle)
-                .foregroundColor(.red)
-            
-            Text("Configuration Error")
-                .font(.headline)
-            
-            Text(message)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(4)
-            
-            Spacer()
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.gray).opacity(0.05))
     }
 }

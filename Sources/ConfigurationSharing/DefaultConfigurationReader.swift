@@ -4,6 +4,11 @@ import Foundation
 import Logging
 import ServiceLifecycle
 
+/// Protocol for services that support explicit refresh
+public protocol Refreshable: Sendable {
+    func refresh() async throws
+}
+
 /// A default configuration provider dependency with async initialization support.
 ///
 /// Most configuration providers have async initializers, so this dependency provides
@@ -51,10 +56,18 @@ public struct DefaultConfigurationReader: Sendable {
     /// If services are provided, they will be managed in a ServiceGroup using the logger.
     public var initialize: @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)
     
+    /// Refresh method that can be called to trigger configuration updates.
+    /// Providers that conform to the Refreshable protocol will be refreshed.
+    /// This is useful when returning from the background to ensure fresh configuration.
+    public var refresh: @Sendable () async -> Void
+    
     public init(initialize: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)) {
         let cache = ReaderCache()
         self.initialize = {
             try await cache.getOrInitialize(with: initialize)
+        }
+        self.refresh = {
+            await cache.refresh()
         }
     }
 }
@@ -63,6 +76,7 @@ public struct DefaultConfigurationReader: Sendable {
 private actor ReaderCache {
     private var cachedReader: ConfigReader?
     private var serviceGroup: ServiceGroup?
+    private var services: [any Service]?
     
     func getOrInitialize(
         with factory: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)
@@ -75,6 +89,7 @@ private actor ReaderCache {
         // Initialize via factory
         let (reader, services, logger) = try await factory()
         cachedReader = reader
+        self.services = services
         
         // If services are provided, manage them in a ServiceGroup
         if let services = services, !services.isEmpty {
@@ -95,6 +110,24 @@ private actor ReaderCache {
         }
         
         return (reader, services, logger)
+    }
+    
+    func refresh() async {
+        // Call refresh on any providers that support it
+        if let services = services {
+            for service in services {
+                // Check if service conforms to Refreshable protocol
+                if let refreshable = service as? Refreshable {
+                    try? await refreshable.refresh()
+                }
+            }
+        }
+        
+        // Trigger a snapshot update to notify watchers of potential configuration changes
+        guard let reader = cachedReader else { return }
+        
+        // Create a fresh snapshot to prompt any watchers to check for updates
+        _ = reader.snapshot()
     }
 }
 
