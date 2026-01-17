@@ -629,4 +629,198 @@ struct AppRemoteConfigProviderTests {
         
         #expect(result.value != nil)
     }
+    
+    // MARK: - Cache and Fallback Tests
+    
+    /// Tests that provider falls back to fallback URL when primary URL fails.
+    @Test
+    func fallbackURLUsedWhenPrimaryFails() async throws {
+        let fallbackUrl = try createTestConfigFile()
+        defer { try? FileManager.default.removeItem(at: fallbackUrl) }
+        
+        // Use a non-existent URL as primary
+        let invalidUrl = URL(string: "file:///nonexistent/config.json")!
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: invalidUrl,
+            fallbackURL: fallbackUrl,
+            resolutionContext: context
+        )
+        
+        // Should successfully load from fallback
+        let snapshot = provider.snapshot()
+        #expect(snapshot is JSONSnapshot)
+    }
+    
+    /// Tests that provider caches successful fetches.
+    @Test
+    func successfulFetchIsCached() async throws {
+        let configUrl = try createTestConfigFile()
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let tempDir = FileManager.default.temporaryDirectory
+        let cacheUrl = tempDir.appendingPathComponent("test-cache-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: cacheUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let _ = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            cacheURL: cacheUrl,
+            resolutionContext: context
+        )
+        
+        // Verify cache file was created
+        #expect(FileManager.default.fileExists(atPath: cacheUrl.path))
+    }
+    
+    /// Tests that provider prefers cache over bundled fallback.
+    @Test
+    func cachePreferredOverFallback() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        
+        // Create cache with specific content
+        let cacheUrl = tempDir.appendingPathComponent("test-cache-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: cacheUrl) }
+        
+        let cacheJSON: [String: Any] = [
+            "settings": [
+                "source": "cache",
+                "value": 100
+            ],
+            "overrides": []
+        ]
+        let cacheData = try JSONSerialization.data(withJSONObject: cacheJSON)
+        try cacheData.write(to: cacheUrl)
+        
+        // Create fallback with different content
+        let fallbackUrl = tempDir.appendingPathComponent("test-fallback-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fallbackUrl) }
+        
+        let fallbackJSON: [String: Any] = [
+            "settings": [
+                "source": "fallback",
+                "value": 200
+            ],
+            "overrides": []
+        ]
+        let fallbackData = try JSONSerialization.data(withJSONObject: fallbackJSON)
+        try fallbackData.write(to: fallbackUrl)
+        
+        // Use non-existent primary URL
+        let invalidUrl = URL(string: "file:///nonexistent/config.json")!
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: invalidUrl,
+            cacheURL: cacheUrl,
+            fallbackURL: fallbackUrl,
+            resolutionContext: context
+        )
+        
+        // Should load from cache (value: 100), not fallback (value: 200)
+        let key = Configuration.AbsoluteConfigKey("value")
+        let result = try await provider.fetchValue(forKey: key, type: .int)
+        
+        #expect(result.value == 100)
+    }
+    
+    /// Tests that provider uses fallback when cache is invalid.
+    @Test
+    func fallbackUsedWhenCacheInvalid() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        
+        // Create invalid cache
+        let cacheUrl = tempDir.appendingPathComponent("test-cache-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: cacheUrl) }
+        try "invalid json".write(to: cacheUrl, atomically: true, encoding: .utf8)
+        
+        // Create valid fallback
+        let fallbackUrl = try createTestConfigFile()
+        defer { try? FileManager.default.removeItem(at: fallbackUrl) }
+        
+        // Use non-existent primary URL
+        let invalidUrl = URL(string: "file:///nonexistent/config.json")!
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: invalidUrl,
+            cacheURL: cacheUrl,
+            fallbackURL: fallbackUrl,
+            resolutionContext: context
+        )
+        
+        // Should successfully load from fallback despite invalid cache
+        let snapshot = provider.snapshot()
+        #expect(snapshot is JSONSnapshot)
+    }
+    
+    /// Tests that refresh failure doesn't break existing configuration.
+    @Test
+    func refreshFailurePreservesCurrentConfig() async throws {
+        let configUrl = try createTestConfigFile()
+        defer { try? FileManager.default.removeItem(at: configUrl) }
+        
+        let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+            platform: .iOS,
+            platformVersion: OperatingSystemVersion(majorVersion: 17, minorVersion: 0, patchVersion: 0),
+            appVersion: try Version("1.0.0"),
+            variant: nil,
+            buildVariant: .release,
+            language: nil
+        )
+        
+        let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+            url: configUrl,
+            minimumRefreshInterval: .seconds(0),  // Allow immediate refresh
+            resolutionContext: context
+        )
+        
+        // Get initial value
+        let key = Configuration.AbsoluteConfigKey("apiEndpoint")
+        let initialResult = try await provider.fetchValue(forKey: key, type: .string)
+        #expect(initialResult.value != nil)
+        
+        // Delete the config file to simulate refresh failure
+        try FileManager.default.removeItem(at: configUrl)
+        
+        // Try to refresh - should not throw, should keep current config
+        try? await provider.refresh()
+        
+        // Should still have the value from before
+        let afterRefreshResult = try await provider.fetchValue(forKey: key, type: .string)
+        #expect(afterRefreshResult.value == initialResult.value)
+    }
 }

@@ -192,6 +192,12 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
 
     /// The URL of the configuration file to monitor.
     private let url: URL
+    
+    /// Optional URL for caching downloaded configuration data.
+    private let cacheURL: URL?
+    
+    /// Optional URL for a local fallback configuration file.
+    private let fallbackURL: URL?
 
     /// The interval between polling checks. If nil, automatic polling is disabled.
     private let pollInterval: Duration?
@@ -244,6 +250,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         snapshotType: Snapshot.Type = Snapshot.self,
         parsingOptions: Snapshot.ParsingOptions = .default,
         url: URL,
+        cacheURL: URL? = nil,
+        fallbackURL: URL? = nil,
         pollInterval: Duration? = .seconds(3600),
         minimumRefreshInterval: Duration = .seconds(300),
         resolutionContext: ResolutionContext,
@@ -253,6 +261,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     ) async throws {
         self.parsingOptions = parsingOptions
         self.url = url
+        self.cacheURL = cacheURL
+        self.fallbackURL = fallbackURL
         self.pollInterval = pollInterval
         self.minimumRefreshInterval = minimumRefreshInterval
         self.resolutionContext = .init(resolutionContext)
@@ -280,41 +290,19 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             providerName: providerName
         )
 
-        // Perform initial load
+        // Perform initial load with fallback chain: network → fallback → cache
         logger.debug("Performing initial file load")
         let timestamp = Date()
-        let (loadedData, _) = try await URLSession.shared.data(from: url)
-        
-        // If public key is provided, verify signature and extract the actual config data
-        let (actualConfigData, initialSnapshot): (Data, Snapshot)
-        if let publicKey = publicKey {
-            // Verify and extract signed config
-            let _ = try Config(data: loadedData, publicKey: publicKey) // Verify signature
-            
-            // Extract the actual config data from the signed wrapper
-            guard let json = try JSONSerialization.jsonObject(with: loadedData, options: []) as? [String: Any],
-                  let encodedConfigData = json[Config.dataKey] as? String,
-                  let configData = Data(base64Encoded: encodedConfigData) else {
-                throw ConfigError.base64DecodingFailed
-            }
-            let resolvedSnapshot = try Self.makeResolvedSnapshot(
-                from: configData,
-                context: resolutionContext,
-                providerName: providerName,
-                parsingOptions: parsingOptions
-            )
-            actualConfigData = configData
-            initialSnapshot = resolvedSnapshot
-        } else {
-            let resolvedSnapshot = try Self.makeResolvedSnapshot(
-                from: loadedData,
-                context: resolutionContext,
-                providerName: providerName,
-                parsingOptions: parsingOptions
-            )
-            actualConfigData = loadedData
-            initialSnapshot = resolvedSnapshot
-        }
+        let (actualConfigData, initialSnapshot) = try await Self.fetchAndParseConfig(
+            preferredURL: url,
+            fallbackURL: fallbackURL,
+            cacheURL: cacheURL,
+            publicKey: publicKey,
+            resolutionContext: resolutionContext,
+            providerName: providerName,
+            parsingOptions: parsingOptions,
+            logger: logger
+        )
 
         // Initialize storage with the actual config data (unwrapped if signed)
         self.storage = .init(
@@ -362,6 +350,8 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
     ///
     /// ## Configuration keys
     /// - `url` (string, required): The URL to the configuration file to monitor.
+    /// - `cacheURL` (string, optional): URL where downloaded configuration should be cached.
+    /// - `fallbackURL` (string, optional): URL to a local fallback configuration file.
     /// - `publicKey` (string, optional): Base64-encoded Curve25519 public key for verifying signed configurations.
     /// - `pollIntervalSeconds` (int, optional, default: 3600): Automatic polling interval in seconds. Set to 0 to disable polling.
     /// - `minimumRefreshIntervalSeconds` (int, optional, default: 300): Minimum interval between refresh attempts in seconds.
@@ -399,10 +389,16 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         let pollIntervalSeconds = config.int(forKey: "pollIntervalSeconds", default: 3600)
         let effectivePollInterval = pollIntervalSeconds > 0 ? Duration.seconds(pollIntervalSeconds) : nil
         
+        // Parse optional cache and fallback URLs
+        let cacheURL = config.string(forKey: "cacheURL").flatMap { URL(string: $0) }
+        let fallbackURL = config.string(forKey: "fallbackURL").flatMap { URL(string: $0) }
+        
         try await self.init(
             snapshotType: snapshotType,
             parsingOptions: parsingOptions,
             url: config.requiredString(forKey: "url", as: URL.self),
+            cacheURL: cacheURL,
+            fallbackURL: fallbackURL,
             pollInterval: effectivePollInterval,
             minimumRefreshInterval: Duration.seconds(config.int(forKey: "minimumRefreshIntervalSeconds", default: 300)),
             resolutionContext: resolutionContext,
@@ -412,7 +408,171 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         )
     }
 
+    // MARK: - Data Fetching
+    
+    /// Centralized method for fetching and parsing configuration data.
+    ///
+    /// Attempts to fetch configuration in the following order:
+    /// 1. From the preferred URL (typically network)
+    /// 2. From the cache URL if provided (previously downloaded data)
+    /// 3. From the fallback URL if provided (typically bundled file)
+    ///
+    /// If a fetch succeeds, the data is cached to cacheURL if provided.
+    ///
+    /// - Parameters:
+    ///   - preferredURL: Primary URL to fetch from (e.g., network URL)
+    ///   - fallbackURL: Optional local file URL to use if preferred fetch fails
+    ///   - cacheURL: Optional URL where data should be cached
+    ///   - resolutionContext: Context for resolving configuration
+    ///   - logger: Logger for diagnostic messages
+    /// - Returns: Tuple of (raw config data, resolved snapshot)
+    /// - Throws: If all fetch attempts fail
+    private static func fetchAndParseConfig(
+        preferredURL: URL,
+        fallbackURL: URL?,
+        cacheURL: URL?,
+        publicKey: Curve25519.Signing.PublicKey?,
+        resolutionContext: ResolutionContext,
+        providerName: String,
+        parsingOptions: Snapshot.ParsingOptions,
+        logger: Logger
+    ) async throws -> (Data, Snapshot) {
+        var lastError: Error?
+        
+        // Try preferred URL first
+        do {
+            logger.debug("Attempting to fetch from preferred URL", metadata: [
+                "\(providerName).url": .string(preferredURL.absoluteString)
+            ])
+            let (loadedData, _) = try await URLSession.shared.data(from: preferredURL)
+            let (data, snapshot) = try Self.processAndResolveData(
+                loadedData,
+                publicKey: publicKey,
+                resolutionContext: resolutionContext,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            
+            // Cache the successfully fetched data
+            if let cacheURL = cacheURL {
+                try? data.write(to: cacheURL, options: [.atomic])
+                logger.debug("Cached configuration data", metadata: [
+                    "\(providerName).cacheURL": .string(cacheURL.absoluteString)
+                ])
+            }
+            
+            return (data, snapshot)
+        } catch {
+            lastError = error
+            logger.warning("Failed to fetch from preferred URL", metadata: [
+                "\(providerName).error": .string(String(describing: error))
+            ])
+        }
+        
+        // Try cache URL second - more recent than bundled fallback
+        if let cacheURL = cacheURL {
+            do {
+                logger.debug("Attempting to load from cache", metadata: [
+                    "\(providerName).cacheURL": .string(cacheURL.absoluteString)
+                ])
+                let loadedData = try Data(contentsOf: cacheURL)
+                let (data, snapshot) = try Self.processAndResolveData(
+                    loadedData,
+                    publicKey: publicKey,
+                    resolutionContext: resolutionContext,
+                    providerName: providerName,
+                    parsingOptions: parsingOptions
+                )
+                logger.info("Loaded configuration from cache")
+                return (data, snapshot)
+            } catch {
+                lastError = error
+                logger.warning("Failed to load from cache", metadata: [
+                    "\(providerName).error": .string(String(describing: error))
+                ])
+            }
+        }
+        
+        // Try fallback URL as last resort
+        if let fallbackURL = fallbackURL {
+            do {
+                logger.debug("Attempting to fetch from fallback URL", metadata: [
+                    "\(providerName).fallbackURL": .string(fallbackURL.absoluteString)
+                ])
+                let loadedData = try Data(contentsOf: fallbackURL)
+                let (data, snapshot) = try Self.processAndResolveData(
+                    loadedData,
+                    publicKey: publicKey,
+                    resolutionContext: resolutionContext,
+                    providerName: providerName,
+                    parsingOptions: parsingOptions
+                )
+                return (data, snapshot)
+            } catch {
+                lastError = error
+                logger.warning("Failed to fetch from fallback URL", metadata: [
+                    "\(providerName).error": .string(String(describing: error))
+                ])
+            }
+        }
+        
+        // All attempts failed
+        throw lastError ?? NSError(
+            domain: "AppRemoteConfigProvider",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to fetch configuration from all sources"]
+        )
+    }
+    
+    /// Processes raw data (verifying signature if needed) and resolves it into a snapshot.
+    ///
+    /// - Parameters:
+    ///   - loadedData: Raw data that may be signed or unsigned
+    ///   - publicKey: Optional public key for signature verification
+    ///   - resolutionContext: Context for resolving configuration
+    ///   - providerName: Name of the provider for logging
+    ///   - parsingOptions: Options for parsing the configuration
+    /// - Returns: Tuple of (unwrapped config data, resolved snapshot)
+    /// - Throws: If signature verification or parsing fails
+    private static func processAndResolveData(
+        _ loadedData: Data,
+        publicKey: Curve25519.Signing.PublicKey?,
+        resolutionContext: ResolutionContext,
+        providerName: String,
+        parsingOptions: Snapshot.ParsingOptions
+    ) throws -> (Data, Snapshot) {
+        // If public key is provided, verify signature and extract the actual config data
+        if let publicKey = publicKey {
+            // Verify signature
+            let _ = try Config(data: loadedData, publicKey: publicKey)
+            
+            // Extract the actual config data from the signed wrapper
+            guard let json = try JSONSerialization.jsonObject(with: loadedData, options: []) as? [String: Any],
+                  let encodedConfigData = json[Config.dataKey] as? String,
+                  let configData = Data(base64Encoded: encodedConfigData) else {
+                throw ConfigError.base64DecodingFailed
+            }
+            
+            let resolvedSnapshot = try Self.makeResolvedSnapshot(
+                from: configData,
+                context: resolutionContext,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            return (configData, resolvedSnapshot)
+        } else {
+            let resolvedSnapshot = try Self.makeResolvedSnapshot(
+                from: loadedData,
+                context: resolutionContext,
+                providerName: providerName,
+                parsingOptions: parsingOptions
+            )
+            return (loadedData, resolvedSnapshot)
+        }
+    }
+
     // MARK: - Refresh Methods
+
     
     /// Manually triggers a refresh of the configuration data.
     ///
@@ -496,28 +656,27 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
             ]
         )
 
-        // Load new data outside the lock
-        let (loadedData, _) = try await URLSession.shared.data(from: url)
-        
-        // If public key is provided, verify and extract signed config
+        // Try to load new data - if this fails, we'll keep using the current config
         let (actualData, newSnapshot): (Data, Snapshot)
-        if let publicKey = self.publicKey {
-            // Verify signed config
-            let _ = try Config(data: loadedData, publicKey: publicKey)
-            
-            // Extract actual config data
-            guard let json = try JSONSerialization.jsonObject(with: loadedData, options: []) as? [String: Any],
-                  let encodedConfigData = json[Config.dataKey] as? String,
-                  let configData = Data(base64Encoded: encodedConfigData) else {
-                throw ConfigError.base64DecodingFailed
-            }
-            let resolvedSnapshot = try makeResolvedSnapshot(from: configData)
-            actualData = configData
-            newSnapshot = resolvedSnapshot
-        } else {
-            let resolvedSnapshot = try makeResolvedSnapshot(from: loadedData)
-            actualData = loadedData
-            newSnapshot = resolvedSnapshot
+        do {
+            let result = try await Self.fetchAndParseConfig(
+                preferredURL: url,
+                fallbackURL: nil, // Don't use fallback on refresh, only on init
+                cacheURL: cacheURL,
+                publicKey: publicKey,
+                resolutionContext: getResolutionContext(),
+                providerName: providerName,
+                parsingOptions: parsingOptions,
+                logger: logger
+            )
+            actualData = result.0
+            newSnapshot = result.1
+        } catch {
+            // Log the error but don't throw - keep using current configuration
+            logger.error("Failed to refresh configuration, keeping current config", metadata: [
+                "error": .string(String(describing: error))
+            ])
+            return
         }
 
         typealias ValueWatchers = [(
