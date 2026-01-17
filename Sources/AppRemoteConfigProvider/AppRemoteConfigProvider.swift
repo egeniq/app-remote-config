@@ -304,6 +304,22 @@ public final class AppRemoteConfigProvider<Snapshot: FileConfigSnapshot>: Sendab
         // Update initial metrics
         self.metrics.fileSize.record(actualConfigData.count)
 
+        // Schedule initial resolution timer for any scheduled overrides
+        let relevantDates = (try? Config(data: actualConfigData))?
+            .relevantResolutionDates(
+                platform: resolutionContext.platform,
+                platformVersion: resolutionContext.platformVersion,
+                appVersion: resolutionContext.appVersion,
+                variant: resolutionContext.variant,
+                buildVariant: resolutionContext.buildVariant,
+                language: resolutionContext.language
+            ) ?? []
+        let initialNextDate = relevantDates.first(where: { $0 > timestamp })
+        scheduleResolutionTimer(for: initialNextDate)
+        
+        // Store the next resolution date in storage
+        storage.withLock { $0.nextResolutionDate = initialNextDate }
+
         logger.debug(
             "Successfully initialized reloading app remote config provider",
             metadata: [
