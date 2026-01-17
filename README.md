@@ -10,7 +10,96 @@ Create a simple configuration file that is easy to maintain and host, yet provid
 
 The JSON/YAML schema is defined [here](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json).
 
-## AppRemoteConfigClient
+## Modules
+
+This package provides several modules for different use cases:
+
+### AppRemoteConfigProvider
+
+A Swift Configuration provider that fetches and monitors remote configuration with automatic polling, caching, and fallback support. Ideal for apps that need reactive configuration updates with scheduled overrides.
+
+**Key Features:**
+- Automatic polling with configurable intervals
+- Disk caching for offline support
+- Local fallback file support
+- Graceful error handling (keeps current config on fetch failures)
+- Scheduled override resolution with automatic timer management
+- Optional signature verification with Curve25519 keys
+- Full integration with Swift Configuration and Swift Sharing
+
+**Example:**
+```swift
+import AppRemoteConfigProvider
+
+let context = AppRemoteConfigProvider<JSONSnapshot>.ResolutionContext(
+    platform: .iOS,
+    platformVersion: ProcessInfo.processInfo.operatingSystemVersion,
+    appVersion: try Version("1.0.0"),
+    buildVariant: .release
+)
+
+let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+    url: URL(string: "https://example.com/config.json")!,
+    cacheURL: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("config-cache.json"),
+    fallbackURL: Bundle.main.url(forResource: "config", withExtension: "json"),
+    pollInterval: .seconds(3600),  // Poll every hour
+    resolutionContext: context
+)
+
+let reader = ConfigReader(providers: [provider])
+let apiEndpoint = reader.string(forKey: "apiEndpoint")
+```
+
+### ConfigurationSharing
+
+Integrates AppRemoteConfigProvider with Swift Sharing's `@SharedReader` for reactive SwiftUI views. Values automatically update when configuration changes.
+
+**Example:**
+```swift
+import ConfigurationSharing
+import Sharing
+
+@main
+struct MyApp: App {
+    init() {
+        prepareDependencies {
+            $0.defaultConfigurationReader = DefaultConfigurationReader(initialize: {
+                let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+                    url: configURL,
+                    cacheURL: cacheURL,
+                    fallbackURL: Bundle.main.url(forResource: "config", withExtension: "json"),
+                    pollInterval: .seconds(3600),
+                    resolutionContext: context
+                )
+                return (ConfigReader(providers: [provider]), [provider], logger)
+            })
+        }
+    }
+}
+
+struct ContentView: View {
+    @SharedReader(.configuration("apiEndpoint"))
+    var apiEndpoint = "https://api.example.com"
+    
+    @SharedReader(.configuration("features.betaMode"))
+    var betaMode = false
+    
+    var body: some View {
+        Text("API: \(apiEndpoint)")  // Updates automatically!
+    }
+}
+```
+
+See [ConfigurationSharing README](Sources/ConfigurationSharing/README.md) for full documentation.
+
+### AppRemoteConfigService (Legacy)
+
+The original service-based approach using macros and Perception. Still supported but AppRemoteConfigProvider is recommended for new projects.
+
+## AppRemoteConfigClient (Legacy)
+
+> **Note:** For new projects, consider using `AppRemoteConfigProvider` with Swift Configuration instead. This approach provides better integration with modern Swift concurrency and the Swift Configuration ecosystem.
 
 Import the package in your `Package.swift` file:
 
@@ -96,6 +185,43 @@ Then your `AppRemoteConfigClient.swift` is something like this:
             service = AppRemoteConfigService(url: url, publicKey: nil, bundledConfigURL: bundledConfigURL, bundleIdentifier: Bundle.main.bundleIdentifier ?? "Sample", apply: values.apply(settings:))
         }
     }
+
+## Configuration Caching and Fallback
+
+AppRemoteConfigProvider supports robust offline operation through caching and fallback mechanisms:
+
+### Fallback Chain
+
+When fetching configuration, the provider tries sources in this order:
+1. **Network** (primary URL) - Fetch fresh configuration from server
+2. **Cache** (disk) - Previously downloaded configuration (more recent than bundled)
+3. **Fallback** (bundled file) - Local configuration file included in app bundle
+
+### Caching
+
+Successful network fetches are automatically cached to disk if `cacheURL` is provided:
+
+```swift
+let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    .appendingPathComponent("remote-config.json")
+
+let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+    url: networkURL,
+    cacheURL: cacheURL,  // Automatic caching
+    fallbackURL: Bundle.main.url(forResource: "default-config", withExtension: "json"),
+    resolutionContext: context
+)
+```
+
+### Graceful Error Handling
+
+If a refresh fails (network error, parsing error), the provider:
+- Logs the error for debugging
+- **Keeps the current configuration** (no crash or data loss)
+- Continues serving cached values to the app
+- Will retry on the next refresh cycle
+
+This ensures your app remains functional even with network issues or server problems.
 
 ## CLI Utility
 
