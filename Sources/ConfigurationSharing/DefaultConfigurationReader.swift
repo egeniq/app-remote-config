@@ -12,8 +12,8 @@ import ServiceLifecycle
 /// when needed.
 ///
 /// The reader is cached after the first initialization, so subsequent calls return
-/// the same instance. If the provider conforms to `Service`, it will be automatically
-/// managed in a ServiceGroup.
+/// the same instance. If services are provided, they are automatically managed in a
+/// ServiceGroup for lifecycle management.
 ///
 /// Example usage:
 /// ```swift
@@ -32,7 +32,8 @@ import ServiceLifecycle
 ///                     logger: logger
 ///                 )
 ///                 
-///                 return (ConfigReader(providers: [provider]), logger)
+///                 // Return reader, services to manage, and logger
+///                 return (ConfigReader(providers: [provider]), [provider], logger)
 ///             }
 ///         }
 ///     }
@@ -45,11 +46,12 @@ import ServiceLifecycle
 /// }
 /// ```
 public struct DefaultConfigurationReader: Sendable {
-    /// Async initialization function that creates and returns a configuration reader and optional logger.
-    /// If a logger is provided, it will be used for any internal service lifecycle management.
-    public var initialize: @Sendable () async throws -> (ConfigReader, Logger?)
+    /// Async initialization function that creates and returns a configuration reader.
+    /// Returns a tuple of (ConfigReader, services to manage, optional logger).
+    /// If services are provided, they will be managed in a ServiceGroup using the logger.
+    public var initialize: @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)
     
-    public init(initialize: @escaping @Sendable () async throws -> (ConfigReader, Logger?)) {
+    public init(initialize: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)) {
         let cache = ReaderCache()
         self.initialize = {
             try await cache.getOrInitialize(with: initialize)
@@ -57,23 +59,42 @@ public struct DefaultConfigurationReader: Sendable {
     }
 }
 
-/// Internal actor for caching the initialized ConfigReader to ensure it's created only once.
+/// Internal actor for managing the initialized ConfigReader and its services.
 private actor ReaderCache {
     private var cachedReader: ConfigReader?
+    private var serviceGroup: ServiceGroup?
     
     func getOrInitialize(
-        with factory: @escaping @Sendable () async throws -> (ConfigReader, Logger?)
-    ) async throws -> (ConfigReader, Logger?) {
+        with factory: @escaping @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)
+    ) async throws -> (ConfigReader, [any Service]?, Logger?) {
         // Return cached reader if available
         if let cached = cachedReader {
-            return (cached, nil)
+            return (cached, nil, nil)
         }
         
-        // Initialize via factory and cache the result
-        let (reader, logger) = try await factory()
+        // Initialize via factory
+        let (reader, services, logger) = try await factory()
         cachedReader = reader
         
-        return (reader, logger)
+        // If services are provided, manage them in a ServiceGroup
+        if let services = services, !services.isEmpty {
+            let group = ServiceGroup(services: services, logger: logger ?? Logger(label: "ConfigurationSharing"))
+            self.serviceGroup = group
+            
+            // Run the service group in the background
+            Task.detached(priority: .userInitiated) {
+                do {
+                    try await group.run()
+                } catch {
+                    // Log but don't fail - configuration reader still works
+                    if let logger = logger {
+                        logger.error("ServiceGroup error: \(error)")
+                    }
+                }
+            }
+        }
+        
+        return (reader, services, logger)
     }
 }
 
@@ -89,7 +110,8 @@ extension DependencyValues {
     ///     $0.defaultConfigurationReader.initialize = {
     ///         var logger = Logger(label: "com.example.config")
     ///         let provider = try await YourConfigProvider(logger: logger)
-    ///         return (ConfigReader(providers: [provider]), logger)
+    ///         // Pass services that conform to Service for lifecycle management
+    ///         return (ConfigReader(providers: [provider]), [provider], logger)
     ///     }
     /// }
     /// ```
@@ -111,7 +133,7 @@ private enum DefaultConfigurationReaderKey: DependencyKey {
                     $0.defaultConfigurationReader.initialize = {
                         var logger = Logger(label: "com.app.config")
                         let provider = try await YourConfigProvider(logger: logger)
-                        return (ConfigReader(providers: [provider]), logger)
+                        return (ConfigReader(providers: [provider]), [provider], logger)
                     }
                 }
             """
@@ -127,7 +149,7 @@ private enum DefaultConfigurationReaderKey: DependencyKey {
             
                 withDependencies {
                     $0.defaultConfigurationReader.initialize = {
-                        (ConfigReader(providers: []), nil)
+                        (ConfigReader(providers: []), nil, nil)
                     }
                 } operation: {
                     // Test code here

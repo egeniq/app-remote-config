@@ -29,8 +29,19 @@ struct MyApp: App {
     init() {
         prepareDependencies {
             $0.defaultConfigurationReader.initialize = {
-                let provider = try await AppRemoteConfigProvider(/* ... */)
-                return ConfigReader(providers: [provider])
+                var logger = Logger(label: "com.example.config")
+                logger.logLevel = .debug
+                
+                let provider = try await AppRemoteConfigProvider(
+                    url: configURL,
+                    pollInterval: .seconds(30),
+                    resolutionContext: context,
+                    logger: logger
+                )
+                
+                // Return reader, services to manage, and logger
+                // Services will be automatically managed in a ServiceGroup
+                return (ConfigReader(providers: [provider]), [provider], logger)
             }
         }
     }
@@ -91,14 +102,20 @@ struct MyApp: App {
     }
 }
 
-private func createMyConfigReader() async throws -> ConfigReader {
+private func createMyConfigReader() async throws -> (ConfigReader, [any Service]?, Logger?) {
+    var logger = Logger(label: "com.example.config")
+    logger.logLevel = .debug
+    
     let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
         url: configURL,
         pollInterval: .seconds(30),
         resolutionContext: context,
         logger: logger
     )
-    return ConfigReader(providers: [provider])
+    
+    // Return the reader, services that need lifecycle management, and logger
+    // AppRemoteConfigProvider conforms to Service, so it will be managed automatically
+    return (ConfigReader(providers: [provider]), [provider], logger)
 }
 ```
 
@@ -114,11 +131,11 @@ The `ConfigurationKey<Value>` struct implements `SharedReaderKey` to bridge Swif
 
 ### DefaultConfigurationReader
 
-The `DefaultConfigurationReader` dependency provides an async factory pattern for initializing configuration readers:
+The `DefaultConfigurationReader` dependency provides an async factory pattern for initializing configuration readers with automatic service lifecycle management:
 
 ```swift
 public struct DefaultConfigurationReader: Sendable {
-    public var initialize: @Sendable () async throws -> ConfigReader
+    public var initialize: @Sendable () async throws -> (ConfigReader, [any Service]?, Logger?)
 }
 ```
 
@@ -126,6 +143,8 @@ This allows you to:
 1. Set up the initialization factory synchronously in `prepareDependencies`
 2. Call the async factory when `@SharedReader` needs the reader
 3. Handle complex async setup (network requests, file I/O, etc.)
+4. Optionally pass services that conform to `Service` for automatic lifecycle management
+5. The reader is cached after first initialization, so services run only once
 
 ## Type Support
 

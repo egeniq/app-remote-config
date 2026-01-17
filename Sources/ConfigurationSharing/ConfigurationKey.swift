@@ -62,7 +62,7 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
                     resolvedReader = reader
                 } else {
                     @Dependency(\.defaultConfigurationReader) var defaultReader
-                    let (reader, _) = try await defaultReader.initialize()
+                    let (reader, _, _) = try await defaultReader.initialize()
                     resolvedReader = reader
                 }
                 
@@ -95,7 +95,7 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
                     resolvedReader = reader
                 } else {
                     @Dependency(\.defaultConfigurationReader) var defaultReader
-                    let (reader, _) = try await defaultReader.initialize()
+                    let (reader, _, _) = try await defaultReader.initialize()
                     resolvedReader = reader
                 }
                 
