@@ -3,10 +3,10 @@ import Dependencies
 import Foundation
 import Sharing
 
-/// A sharing key that reads and observes values from a `ConfigProvider`.
+/// A sharing key that reads and observes values from a `ConfigReader`.
 ///
 /// This key integrates the Swift Configuration library with the Swift Sharing library,
-/// allowing you to use `@SharedReader` properties backed by configuration providers.
+/// allowing you to use `@SharedReader` properties backed by a configuration reader.
 ///
 /// Example usage:
 /// ```swift
@@ -20,16 +20,16 @@ import Sharing
 /// var betaMode = false
 /// ```
 ///
-/// The key automatically observes the configuration provider for changes and updates
+/// The key automatically observes the default configuration reader for changes and updates
 /// the shared value when the underlying configuration changes.
 ///
 /// Note: Configuration is read-only, so only `@SharedReader` is supported.
 public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     private let key: String
-    private let provider: any ConfigProvider
+    private let reader: ConfigReader?
     
     public var id: ConfigurationKeyID {
-        ConfigurationKeyID(key: key, provider: provider)
+        ConfigurationKeyID(key: key, reader: reader)
     }
     
     /// Creates a configuration key that reads from the default configuration provider.
@@ -38,18 +38,17 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     ///   - key: The configuration key path (dot-separated for nested values)
     public init(_ key: String) where Value: ConfigPrimitiveValue {
         self.key = key
-        @Dependency(\.configProvider) var provider
-        self.provider = provider
+        self.reader = nil
     }
     
-    /// Creates a configuration key that reads from a specific configuration provider.
+    /// Creates a configuration key that reads from a specific configuration reader.
     ///
     /// - Parameters:
     ///   - key: The configuration key path (dot-separated for nested values)
-    ///   - provider: The configuration provider to read from
-    public init(_ key: String, provider: any ConfigProvider) where Value: ConfigPrimitiveValue {
+    ///   - reader: The configuration reader to read from
+    public init(_ key: String, reader: ConfigReader?) where Value: ConfigPrimitiveValue {
         self.key = key
-        self.provider = provider
+        self.reader = reader
     }
     
     public func load(context: LoadContext<Value>, continuation: LoadContinuation<Value>) {
@@ -66,7 +65,15 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     ) -> SharedSubscription {
         let task = Task {
             do {
-                try await provider.watchSnapshot { updates in
+                let resolvedReader: ConfigReader
+                if let reader = reader {
+                    resolvedReader = reader
+                } else {
+                    // Something like
+                    @Dependency(\.defaultConfigurationReader) var defaultReader
+                    resolvedReader = try await defaultReader.initialize()
+                }
+                try await resolvedReader.watchSnapshot { updates in
                     for await snapshot in updates {
                         // Read the value from the snapshot
                         if let result = try? snapshot.value(
@@ -94,13 +101,13 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
         // Configuration is read-only, so writes are ignored
     }
     
-    private func readValue() throws -> Value? {
-        let result = try provider.value(
-            forKey: Configuration.AbsoluteConfigKey(stringLiteral: key),
-            type: configType(for: Value.self)
-        )
-        return extractValue(from: result)
-    }
+    // private func readValue() throws -> Value? {
+    //     let result = try reader?.value(
+    //         forKey: Configuration.AbsoluteConfigKey(stringLiteral: key),
+    //         type: configType(for: Value.self)
+    //     )
+    //     return extractValue(from: result)
+    // }
     
     private func extractValue(from result: Configuration.LookupResult) -> Value? {
         guard let configValue = result.value else {
@@ -148,11 +155,11 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
 /// Identifier for configuration keys
 public struct ConfigurationKeyID: Hashable {
     let key: String
-    let providerName: String
+    // let providerName: String
     
-    init(key: String, provider: any ConfigProvider) {
+    init(key: String, reader: ConfigReader?) {
         self.key = key
-        self.providerName = provider.providerName
+        // self.providerName = reader.
     }
 }
 
@@ -172,9 +179,9 @@ extension SharedReaderKey where Self == ConfigurationKey<String> {
         ConfigurationKey(key)
     }
     
-    /// Creates a configuration key for a string value with a specific provider.
-    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
-        ConfigurationKey(key, provider: provider)
+    /// Creates a configuration key for a string value with a specific reader.
+    public static func configuration(_ key: String, reader: ConfigReader?) -> Self {
+        ConfigurationKey(key, reader: reader)
     }
 }
 
@@ -184,9 +191,9 @@ extension SharedReaderKey where Self == ConfigurationKey<Int> {
         ConfigurationKey(key)
     }
     
-    /// Creates a configuration key for an integer value with a specific provider.
-    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
-        ConfigurationKey(key, provider: provider)
+    /// Creates a configuration key for a string value with a specific reader.
+    public static func configuration(_ key: String, reader: ConfigReader?) -> Self {
+        ConfigurationKey(key, reader: reader)
     }
 }
 
@@ -196,9 +203,9 @@ extension SharedReaderKey where Self == ConfigurationKey<Double> {
         ConfigurationKey(key)
     }
     
-    /// Creates a configuration key for a double value with a specific provider.
-    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
-        ConfigurationKey(key, provider: provider)
+    /// Creates a configuration key for a string value with a specific reader.
+    public static func configuration(_ key: String, reader: ConfigReader?) -> Self {
+        ConfigurationKey(key, reader: reader)
     }
 }
 
@@ -208,9 +215,9 @@ extension SharedReaderKey where Self == ConfigurationKey<Bool> {
         ConfigurationKey(key)
     }
     
-    /// Creates a configuration key for a boolean value with a specific provider.
-    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
-        ConfigurationKey(key, provider: provider)
+    /// Creates a configuration key for a string value with a specific reader.
+    public static func configuration(_ key: String, reader: ConfigReader?) -> Self {
+        ConfigurationKey(key, reader: reader)
     }
 }
 
@@ -220,92 +227,9 @@ extension SharedReaderKey where Self == ConfigurationKey<[String]> {
         ConfigurationKey(key)
     }
     
-    /// Creates a configuration key for a string array value with a specific provider.
-    public static func configuration(_ key: String, provider: any ConfigProvider) -> Self {
-        ConfigurationKey(key, provider: provider)
+    /// Creates a configuration key for a string value with a specific reader.
+    public static func configuration(_ key: String, reader: ConfigReader?) -> Self {
+        ConfigurationKey(key, reader: reader)
     }
 }
-
-/// A default configuration provider dependency.
-///
-/// Example:
-/// ```swift
-/// // At app startup (after async initialization):
-/// withDependencies {
-///     $0.configProvider = myConfigProvider
-/// } operation: {
-///     // Provider is available here
-/// }
-///
-/// // Later, anywhere in the app:
-/// @Shared(.configuration("apiEndpoint"))
-/// var apiEndpoint: String = "https://api.example.com"
-/// ```
-private enum ConfigProviderKey: DependencyKey {
-    static var liveValue: any ConfigProvider {
-        EmptyConfigProvider()
-    }
-    static var previewValue: any ConfigProvider {
-        EmptyConfigProvider()
-    }
-    static var testValue: any ConfigProvider {
-        EmptyConfigProvider()
-    }
-}
-
-extension DependencyValues {
-    /// The active configuration provider used by ConfigurationKey.
-    ///
-    /// Set this after async initialization to provide the configuration provider for all
-    /// `@Shared(.configuration(...))` instances that don't specify an explicit provider.
-    ///
-    /// See also: `defaultConfigurationProvider` for async initialization setup.
-    public var configProvider: any ConfigProvider {
-        get { self[ConfigProviderKey.self] }
-        set { self[ConfigProviderKey.self] = newValue }
-    }
-}
-
-/// A placeholder config provider used when no default is set
-private struct EmptyConfigProvider: ConfigProvider {
-    var providerName: String { "EmptyConfigProvider" }
-    
-    func value(forKey key: Configuration.AbsoluteConfigKey, type: Configuration.ConfigType) throws -> Configuration.LookupResult {
-        return Configuration.LookupResult(encodedKey: key.description, value: nil)
-    }
-    
-    func fetchValue(forKey key: Configuration.AbsoluteConfigKey, type: Configuration.ConfigType) async throws -> Configuration.LookupResult {
-        return Configuration.LookupResult(encodedKey: key.description, value: nil)
-    }
-    
-    func watchValue<Return: ~Copyable>(
-        forKey key: Configuration.AbsoluteConfigKey,
-        type: Configuration.ConfigType,
-        updatesHandler: nonisolated(nonsending) (Configuration.ConfigUpdatesAsyncSequence<Result<Configuration.LookupResult, any Error>, Never>) async throws -> Return
-    ) async throws -> Return {
-        let (stream, _) = AsyncStream<Result<Configuration.LookupResult, any Error>>.makeStream()
-        return try await updatesHandler(.init(stream))
-    }
-    
-    func snapshot() -> any Configuration.ConfigSnapshot {
-        EmptySnapshot()
-    }
-    
-    func watchSnapshot<Return: ~Copyable>(
-        updatesHandler: nonisolated(nonsending) (Configuration.ConfigUpdatesAsyncSequence<any Configuration.ConfigSnapshot, Never>) async throws -> Return
-    ) async throws -> Return {
-        let (stream, _) = AsyncStream<any Configuration.ConfigSnapshot>.makeStream()
-        return try await updatesHandler(.init(stream))
-    }
-}
-
-private struct EmptySnapshot: Configuration.ConfigSnapshot {
-    var description: String { "{}" }
-    var debugDescription: String { "{}" }
-    var providerName: String { "EmptySnapshot" }
-    
-    func value(forKey key: Configuration.AbsoluteConfigKey, type: Configuration.ConfigType) throws -> Configuration.LookupResult {
-        return Configuration.LookupResult(encodedKey: key.description, value: nil)
-    }
-}
-
+/
