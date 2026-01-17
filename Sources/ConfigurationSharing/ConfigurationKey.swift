@@ -38,7 +38,7 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     ///   - key: The configuration key path (dot-separated for nested values)
     public init(_ key: String) where Value: ConfigPrimitiveValue {
         self.key = key
-        @Dependency(\.defaultConfigurationProvider) var provider
+        @Dependency(\.configProvider) var provider
         self.provider = provider
     }
     
@@ -230,16 +230,18 @@ extension SharedReaderKey where Self == ConfigurationKey<[String]> {
 ///
 /// Example:
 /// ```swift
-/// // At app startup:
-/// prepareDependencies {
-///     $0.defaultConfigurationProvider = myConfigProvider
+/// // At app startup (after async initialization):
+/// withDependencies {
+///     $0.configProvider = myConfigProvider
+/// } operation: {
+///     // Provider is available here
 /// }
 ///
 /// // Later, anywhere in the app:
-/// @Shared(.configuration("apiEndpoint", default: "https://api.example.com"))
-/// var apiEndpoint: String
+/// @Shared(.configuration("apiEndpoint"))
+/// var apiEndpoint: String = "https://api.example.com"
 /// ```
-private enum DefaultConfigurationProviderKey: DependencyKey {
+private enum ConfigProviderKey: DependencyKey {
     static var liveValue: any ConfigProvider {
         EmptyConfigProvider()
     }
@@ -252,13 +254,15 @@ private enum DefaultConfigurationProviderKey: DependencyKey {
 }
 
 extension DependencyValues {
-    /// The default configuration provider used by ConfigurationKey.
+    /// The active configuration provider used by ConfigurationKey.
     ///
-    /// Set this at app startup to provide a default configuration provider for all
+    /// Set this after async initialization to provide the configuration provider for all
     /// `@Shared(.configuration(...))` instances that don't specify an explicit provider.
-    public var defaultConfigurationProvider: any ConfigProvider {
-        get { self[DefaultConfigurationProviderKey.self] }
-        set { self[DefaultConfigurationProviderKey.self] = newValue }
+    ///
+    /// See also: `defaultConfigurationProvider` for async initialization setup.
+    public var configProvider: any ConfigProvider {
+        get { self[ConfigProviderKey.self] }
+        set { self[ConfigProviderKey.self] = newValue }
     }
 }
 

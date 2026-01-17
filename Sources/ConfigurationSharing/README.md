@@ -48,23 +48,59 @@ var newUI = false
 
 ### Setting a Default Provider
 
-Set a default configuration provider at app startup using Swift Dependencies:
+Most configuration providers have async initializers. ConfigurationSharing provides an async-aware dependency pattern for this:
 
 ```swift
 import Dependencies
 import ConfigurationSharing
+import AppRemoteConfigProvider
 
 @main
 struct MyApp: App {
+    @State private var isInitializing = true
+    
     init() {
+        // Set up the async factory in prepareDependencies
         prepareDependencies {
-            $0.defaultConfigurationProvider = myConfigProvider
+            $0.defaultConfigurationProvider.initialize = {
+                try await AppRemoteConfigProvider<JSONSnapshot>(
+                    url: configURL,
+                    pollInterval: .seconds(30),
+                    resolutionContext: context,
+                    logger: logger
+                )
+            }
         }
     }
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if isInitializing {
+                ProgressView("Loading configuration...")
+                    .task {
+                        await initializeConfiguration()
+                    }
+            } else {
+                ContentView()
+            }
+        }
+    }
+    
+    private func initializeConfiguration() async {
+        @Dependency(\.defaultConfigurationProvider) var providerFactory
+        do {
+            let provider = try await providerFactory.initialize()
+            
+            // Set the active provider for ConfigurationSharing
+            withDependencies {
+                $0.configProvider = provider
+            } operation: {
+                // Provider is now available
+            }
+            
+            isInitializing = false
+        } catch {
+            // Handle initialization error
         }
     }
 }

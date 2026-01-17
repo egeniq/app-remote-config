@@ -8,7 +8,6 @@ import Dependencies
 /// Main content view displaying remote configuration values using ConfigurationSharing
 /// This demonstrates simplified reactive configuration reading with @SharedReader
 struct ContentView: View {
-    @Environment(\.colorScheme) var colorScheme
     
     // Use @SharedReader with ConfigurationKey for reactive configuration values
     // These automatically update whenever the configuration changes
