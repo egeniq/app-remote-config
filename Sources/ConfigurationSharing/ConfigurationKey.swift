@@ -62,7 +62,8 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
                     resolvedReader = reader
                 } else {
                     @Dependency(\.defaultConfigurationReader) var defaultReader
-                    resolvedReader = try await defaultReader.initialize()
+                    let (reader, _) = try await defaultReader.initialize()
+                    resolvedReader = reader
                 }
                 
                 // Get the snapshot and read the current value
@@ -94,7 +95,8 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
                     resolvedReader = reader
                 } else {
                     @Dependency(\.defaultConfigurationReader) var defaultReader
-                    resolvedReader = try await defaultReader.initialize()
+                    let (reader, _) = try await defaultReader.initialize()
+                    resolvedReader = reader
                 }
                 
                 try await resolvedReader.watchSnapshot { updates in
