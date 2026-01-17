@@ -20,8 +20,8 @@ import Sharing
 /// var betaMode = false
 /// ```
 ///
-/// The key automatically observes the default configuration reader for changes and updates
-/// the shared value when the underlying configuration changes.
+/// The key fetches an initial value asynchronously from the configuration reader and then
+/// observes it for changes, updating the shared value when the underlying configuration changes.
 ///
 /// Note: Configuration is read-only, so only `@SharedReader` is supported.
 public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
@@ -52,11 +52,35 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
     }
     
     public func load(context: LoadContext<Value>, continuation: LoadContinuation<Value>) {
-        guard let value = try? readValue() else {
-            continuation.resumeReturningInitialValue()
-            return
+        // Use the continuation to fetch the initial value asynchronously.
+        // We spawn a Task that initializes the reader and fetches the first value,
+        // then resume the continuation with it.
+        Task {
+            do {
+                let resolvedReader: ConfigReader
+                if let reader = reader {
+                    resolvedReader = reader
+                } else {
+                    @Dependency(\.defaultConfigurationReader) var defaultReader
+                    resolvedReader = try await defaultReader.initialize()
+                }
+                
+                // Get the snapshot and read the current value
+                let snapshot = resolvedReader.snapshot()
+                if let extractedValue = extractValue(
+                    from: snapshot,
+                    for: Value.self,
+                    key: key
+                ) {
+                    continuation.resume(with: .success(extractedValue))
+                } else {
+                    continuation.resumeReturningInitialValue()
+                }
+            } catch {
+                // If initialization fails, use the default from context
+                continuation.resumeReturningInitialValue()
+            }
         }
-        continuation.resume(with: .success(value))
     }
     
     public func subscribe(
@@ -69,24 +93,24 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
                 if let reader = reader {
                     resolvedReader = reader
                 } else {
-                    // Something like
                     @Dependency(\.defaultConfigurationReader) var defaultReader
                     resolvedReader = try await defaultReader.initialize()
                 }
+                
                 try await resolvedReader.watchSnapshot { updates in
                     for await snapshot in updates {
-                        // Read the value from the snapshot
-                        if let result = try? snapshot.value(
-                            forKey: Configuration.AbsoluteConfigKey(stringLiteral: key),
-                            type: configType(for: Value.self)
-                        ),
-                           let extractedValue = extractValue(from: result) {
+                        // Read the value from the snapshot using the appropriate method
+                        if let extractedValue = extractValue(
+                            from: snapshot,
+                            for: Value.self,
+                            key: key
+                        ) {
                             subscriber.yield(with: .success(extractedValue))
                         }
                     }
                 }
             } catch {
-                // If watching fails, stick with current value
+                // If watching fails, the value stays at its initial state
             }
         }
         
@@ -101,60 +125,33 @@ public struct ConfigurationKey<Value: Sendable>: SharedReaderKey {
         // Configuration is read-only, so writes are ignored
     }
     
-    // private func readValue() throws -> Value? {
-    //     let result = try reader?.value(
-    //         forKey: Configuration.AbsoluteConfigKey(stringLiteral: key),
-    //         type: configType(for: Value.self)
-    //     )
-    //     return extractValue(from: result)
-    // }
-    
-    private func extractValue(from result: Configuration.LookupResult) -> Value? {
-        guard let configValue = result.value else {
-            return nil
-        }
+    private func extractValue(
+        from snapshot: Configuration.ConfigSnapshotReader,
+        for type: Any.Type,
+        key: String
+    ) -> Value? {
+        let configKey = Configuration.ConfigKey(stringLiteral: key)
         
-        // Extract the actual value based on type using ConfigContent pattern matching
-        if Value.self == String.self {
-            guard case .string(let value) = configValue.content else { return nil }
-            return value as? Value
-        } else if Value.self == Int.self {
-            guard case .int(let value) = configValue.content else { return nil }
-            return value as? Value
-        } else if Value.self == Double.self {
-            guard case .double(let value) = configValue.content else { return nil }
-            return value as? Value
-        } else if Value.self == Bool.self {
-            guard case .bool(let value) = configValue.content else { return nil }
-            return value as? Value
-        } else if Value.self == [String].self {
-            guard case .stringArray(let value) = configValue.content else { return nil }
-            return value as? Value
+        // Read the appropriate type from the snapshot using the public API
+        if type == String.self {
+            return snapshot.string(forKey: configKey) as? Value
+        } else if type == Int.self {
+            return snapshot.int(forKey: configKey) as? Value
+        } else if type == Double.self {
+            return snapshot.double(forKey: configKey) as? Value
+        } else if type == Bool.self {
+            return snapshot.bool(forKey: configKey) as? Value
+        } else if type == [String].self {
+            return snapshot.stringArray(forKey: configKey) as? Value
         } else {
             return nil
-        }
-    }
-    
-    private func configType(for type: Any.Type) -> Configuration.ConfigType {
-        if type == String.self {
-            return .string
-        } else if type == Int.self {
-            return .int
-        } else if type == Double.self {
-            return .double
-        } else if type == Bool.self {
-            return .bool
-        } else if type == [String].self {
-            return .stringArray
-        } else {
-            return .string // Default fallback
         }
     }
 }
 
 /// Identifier for configuration keys
 public struct ConfigurationKeyID: Hashable {
-    let key: String
+    public let key: String
     // let providerName: String
     
     init(key: String, reader: ConfigReader?) {
@@ -232,4 +229,3 @@ extension SharedReaderKey where Self == ConfigurationKey<[String]> {
         ConfigurationKey(key, reader: reader)
     }
 }
-/

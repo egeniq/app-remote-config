@@ -8,173 +8,30 @@ ConfigurationSharing provides a `ConfigurationKey` that conforms to Swift Sharin
 
 ## Features
 
-- **Reactive Configuration**: Use `@SharedReader` to automatically observe configuration changes
+- **Reactive Configuration**: Use `@SharedReader` to automatically observe configuration changes via `watchSnapshot`
 - **Type-Safe Access**: Support for `String`, `Int`, `Double`, `Bool`, and `[String]` types
 - **Provider Integration**: Works with any `ConfigProvider` from Swift Configuration
-- **Dependency Injection**: Supports default providers via Swift Dependencies
+- **Dependency Injection**: Supports default readers via Swift Dependencies
 - **Read-Only**: Configuration is read-only (as it should be for most use cases)
+- **Async-Aware**: Handles async provider initialization through the `DefaultConfigurationReader` dependency
 
 ## Usage
 
-### Basic Example
+### Basic Example with Default Provider
 
 ```swift
 import ConfigurationSharing
 import Sharing
 
-// Use with a default value from the property initializer
-@SharedReader(.configuration("apiEndpoint"))
-var apiEndpoint = "https://api.example.com"
-
-@SharedReader(.configuration("timeout"))
-var timeout = 30
-
-@SharedReader(.configuration("features.betaMode"))
-var betaMode = false
-```
-
-### With a Specific Provider
-
-```swift
-import AppRemoteConfigProvider
-import ConfigurationSharing
-import Sharing
-
-let provider = AppRemoteConfigProvider<JSONSnapshot>(/* ... */)
-
-@SharedReader(.configuration("features.newUI", provider: provider))
-var newUI = false
-```
-
-### Setting a Default Provider
-
-Most configuration providers have async initializers. ConfigurationSharing provides an async-aware dependency pattern for this:
-
-```swift
-import Dependencies
-import ConfigurationSharing
-import AppRemoteConfigProvider
-
+// First, configure the default reader in your app init:
 @main
 struct MyApp: App {
-    @State private var isInitializing = true
-    
-    init() {
-        // Set up the async factory in prepareDependencies
-        prepareDependencies {
-            $0.defaultConfigurationProvider.initialize = {
-                try await AppRemoteConfigProvider<JSONSnapshot>(
-                    url: configURL,
-                    pollInterval: .seconds(30),
-                    resolutionContext: context,
-                    logger: logger
-                )
-            }
-        }
-    }
-    
-    var body: some Scene {
-        WindowGroup {
-            if isInitializing {
-                ProgressView("Loading configuration...")
-                    .task {
-                        await initializeConfiguration()
-                    }
-            } else {
-                ContentView()
-            }
-        }
-    }
-    
-    private func initializeConfiguration() async {
-        @Dependency(\.defaultConfigurationProvider) var providerFactory
-        do {
-            let provider = try await providerFactory.initialize()
-            
-            // Set the active provider for ConfigurationSharing
-            withDependencies {
-                $0.configProvider = provider
-            } operation: {
-                // Provider is now available
-            }
-            
-            isInitializing = false
-        } catch {
-            // Handle initialization error
-        }
-    }
-}
-```
-
-Then use `@SharedReader` without specifying a provider:
-
-```swift
-@SharedReader(.configuration("features.darkMode"))
-var darkMode = false
-```
-
-## Automatic Updates
-
-The `ConfigurationKey` automatically subscribes to changes in the underlying configuration provider. When the configuration changes (e.g., from a remote update or file change), all `@SharedReader` properties backed by that configuration will update automatically.
-
-```swift
-struct SettingsView: View {
-    @SharedReader(.configuration("features.betaMode"))
-    var betaMode = false
-    
-    var body: some View {
-        Text(betaMode ? "Beta Mode: ON" : "Beta Mode: OFF")
-            // The view automatically updates when the config changes
-            // Configuration is read-only, so values cannot be modified
-            // from the UI
-    }
-}
-```
-
-## Supported Types
-
-The following types are supported via the `ConfigPrimitiveValue` protocol:
-
-- `String`
-- `Int`
-- `Double`
-- `Bool`
-- `[String]`
-
-## Integration with AppRemoteConfigProvider
-
-ConfigurationSharing works seamlessly with `AppRemoteConfigProvider`:
-
-```swift
-import AppRemoteConfig
-import AppRemoteConfigProvider
-import ConfigurationSharing
-import ServiceLifecycle
-import Sharing
-
-@main
-struct MyApp: App {
-    let serviceGroup = ServiceGroup(
-        configuration: .init(
-            services: [provider],
-            gracefulShutdownSignals: [.sigterm, .sigint]
-        ),
-        logger: logger
-    )
-    
-    let provider = AppRemoteConfigProvider<JSONSnapshot>(
-        configFileURL: /* ... */,
-        context: /* ... */,
-        pollInterval: .seconds(30)
-    )
-    
     init() {
         prepareDependencies {
-            $0.defaultConfigurationProvider = provider
-        }
-        
-        Task {
-            try await serviceGroup.run()
+            $0.defaultConfigurationReader.initialize = {
+                let provider = try await AppRemoteConfigProvider(/* ... */)
+                return ConfigReader(providers: [provider])
+            }
         }
     }
     
@@ -185,66 +42,105 @@ struct MyApp: App {
     }
 }
 
+// Then use @SharedReader with configuration keys:
 struct ContentView: View {
-    @Shared(.configuration("features.newUI", default: false))
-    var newUI: Bool
+    @SharedReader(.configuration("apiEndpoint"))
+    var apiEndpoint = "https://api.example.com"
+    
+    @SharedReader(.configuration("timeout"))
+    var timeout = 30
+    
+    @SharedReader(.configuration("features.betaMode"))
+    var betaMode = false
     
     var body: some View {
-        if newUI {
-            NewUIView()
-        } else {
-            LegacyUIView()
+        VStack {
+            Text("API: \($apiEndpoint.wrappedValue)")
+            Text("Timeout: \($timeout.wrappedValue)")
+            Text("Beta: \($betaMode.wrappedValue)")
         }
     }
 }
 ```
 
-When the configuration file updates (or a scheduled override triggers), the `newUI` binding will automatically update and the view will re-render.
-
-## Comparison with Direct Provider Access
-
-### Without ConfigurationSharing
+### With a Specific Provider
 
 ```swift
-class ViewModel: ObservableObject {
-    @Published var newUI: Bool = false
-    private var snapshotWatcherTask: Task<Void, Never>?
-    
-    func startWatching(provider: AppRemoteConfigProvider<JSONSnapshot>) {
-        snapshotWatcherTask = Task { @MainActor in
-            for await snapshot in provider.watchSnapshot() {
-                let reader = ConfigSnapshotReader(snapshot: snapshot)
-                newUI = reader.bool(forKey: "features.newUI", default: false)
+import AppRemoteConfigProvider
+import ConfigurationSharing
+import Sharing
+
+let provider = AppRemoteConfigProvider<JSONSnapshot>(/* ... */)
+let reader = ConfigReader(providers: [provider])
+
+@SharedReader(.configuration("features.newUI", reader: reader))
+var newUI = false
+```
+
+### Setting a Default Provider via Dependencies
+
+```swift
+@main
+struct MyApp: App {
+    init() {
+        prepareDependencies {
+            $0.defaultConfigurationReader.initialize = {
+                try await createMyConfigReader()
             }
         }
     }
-    
-    deinit {
-        snapshotWatcherTask?.cancel()
-    }
+}
+
+private func createMyConfigReader() async throws -> ConfigReader {
+    let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+        url: configURL,
+        pollInterval: .seconds(30),
+        resolutionContext: context,
+        logger: logger
+    )
+    return ConfigReader(providers: [provider])
 }
 ```
 
-### With ConfigurationSharing
+## Architecture
+
+### ConfigurationKey
+
+The `ConfigurationKey<Value>` struct implements `SharedReaderKey` to bridge Swift Configuration and Swift Sharing:
+
+- **`load()`**: Asynchronously initializes the reader and fetches the initial configuration value. If no value is found, it falls back to the `@SharedReader` default. This uses the continuation callback to resume asynchronously once the value is available.
+- **`subscribe()`**: Sets up continuous watching of configuration changes via `watchSnapshot`. Updates are streamed to the `SharedSubscriber` as configuration changes occur.
+- **`set()`**: No-op for read-only configuration.
+
+### DefaultConfigurationReader
+
+The `DefaultConfigurationReader` dependency provides an async factory pattern for initializing configuration readers:
 
 ```swift
-struct ContentView: View {
-    @Shared(.configuration("features.newUI", default: false))
-    var newUI: Bool
-    
-    // That's it! No manual watching, no task management, no deinit
+public struct DefaultConfigurationReader: Sendable {
+    public var initialize: @Sendable () async throws -> ConfigReader
 }
 ```
 
-## Implementation Details
+This allows you to:
+1. Set up the initialization factory synchronously in `prepareDependencies`
+2. Call the async factory when `@SharedReader` needs the reader
+3. Handle complex async setup (network requests, file I/O, etc.)
 
-- **Read-Only**: The `save()` operation is a no-op since configuration is typically read-only
-- **Thread-Safe**: Uses Swift Dependencies for safe provider management
-- **Memory Efficient**: Subscriptions are automatically cleaned up when views disappear
-- **Empty Provider**: Provides a safe empty provider when no default is configured
+## Type Support
 
-## See Also
+ConfigurationSharing automatically supports reading these types from Configuration:
 
-- [Swift Configuration](https://github.com/apple/swift-configuration) - The underlying configuration library
-- [Swift Sharing](https://github.com/pointfreeco/swift-sharing) - The reactive state sharing library
-- [AppRemoteConfigProvider](../AppRemoteConfigProvider/README.md) - File-based configuration provider with scheduled resolution
+- `String`
+- `Int`
+- `Double`
+- `Bool`
+- `[String]`
+
+Values are read from `ConfigSnapshotReader` using the appropriate typed method (`.string(forKey:)`, `.int(forKey:)`, etc.).
+
+## Error Handling
+
+- If the `defaultConfigurationReader` dependency is not configured, a `fatalError` is raised with a helpful message.
+- If watching configuration fails, the value remains at its last known state.
+- Missing configuration keys return `nil`, allowing the `@SharedReader` default to apply.

@@ -67,39 +67,39 @@ extension DependencyValues {
     }
 }
 
-// BELOW IS INCORRECT
-// private enum DefaultConfigurationReaderKey: DependencyKey {
-//     static let liveValue = DefaultConfigurationReader {
-//         fatalError(
-//             """
-//             No default configuration provider has been configured.
+private enum DefaultConfigurationReaderKey: DependencyKey {
+    static let liveValue = DefaultConfigurationReader {
+        fatalError(
+            """
+            No default configuration reader has been configured.
             
-//             Set one in prepareDependencies:
+            Set one in prepareDependencies:
             
-//                 prepareDependencies {
-//                     $0.defaultConfigurationProvider.initialize = {
-//                         try await YourConfigProvider(/* ... */)
-//                     }
-//                 }
-//             """
-//         )
-//     }
+                prepareDependencies {
+                    $0.defaultConfigurationReader.initialize = {
+                        let provider = try await YourConfigProvider(/* ... */)
+                        return ConfigReader(providers: [provider])
+                    }
+                }
+            """
+        )
+    }
     
-//     static let testValue = DefaultConfigurationReader {
-//         fatalError(
-//             """
-//             Unimplemented: @Dependency(\\.defaultConfigurationReader)
+    static let testValue = DefaultConfigurationReader {
+        fatalError(
+            """
+            Unimplemented: @Dependency(\\.defaultConfigurationReader)
             
-//             Provide a test reader:
+            Provide a test reader:
             
-//                 withDependencies {
-//                     $0.defaultConfigurationReader.initialize = {
-//                         MockConfigReader()
-//                     }
-//                 } operation: {
-//                     // Test code here
-//                 }
-//             """
-//         )
-//     }
-// }
+                withDependencies {
+                    $0.defaultConfigurationReader.initialize = {
+                        ConfigReader(providers: [])
+                    }
+                } operation: {
+                    // Test code here
+                }
+            """
+        )
+    }
+}

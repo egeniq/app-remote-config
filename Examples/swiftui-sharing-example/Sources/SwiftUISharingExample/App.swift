@@ -18,8 +18,9 @@ struct SwiftUISharingExampleApp: App {
     init() {
         // Prepare dependencies early in the app lifecycle with async initialization factory
         prepareDependencies {
-            $0.defaultConfigurationProvider.initialize = {
-                try await Self.createProvider()
+            $0.defaultConfigurationReader.initialize = {
+                let provider = try await Self.createProvider()
+                return ConfigReader(providers: [provider])
             }
         }
     }
@@ -162,35 +163,13 @@ struct SwiftUISharingExampleApp: App {
     private func initializeProvider() async {
         do {
             // Step 1: Initialize provider using the dependency factory
-            @Dependency(\.defaultConfigurationProvider) var providerFactory
-            let provider = try await providerFactory.initialize()
+            @Dependency(\.defaultConfigurationReader) var readerFactory
+            let configReader = try await readerFactory.initialize()
             
             // Step 2: Get logger for status messages
             var logger = Logger(label: "com.example.remoteconfigsharing")
             logger.logLevel = .debug
-            logger.info("Provider ready for configuration")
-            
-            // Step 3: If provider is a service, start it in a ServiceGroup
-            if let service = provider as? (any Service) {
-                let serviceGroup = ServiceGroup(services: [service], logger: logger)
-                Task {
-                    do {
-                        try await serviceGroup.run()
-                    } catch {
-                        logger.error("ServiceGroup error: \(error)")
-                    }
-                }
-                await MainActor.run {
-                    self.serviceGroup = serviceGroup
-                }
-            }
-            
-            // Step 4: Set the provider for ConfigurationSharing
-            withDependencies {
-                $0.configProvider = provider
-            } operation: {
-                // Dependencies updated
-            }
+            logger.info("Configuration reader ready")
             
             // Step 5: Mark initialization complete
             await MainActor.run {
