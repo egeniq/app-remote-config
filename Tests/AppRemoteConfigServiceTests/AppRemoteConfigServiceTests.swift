@@ -1,9 +1,9 @@
 @testable import AppRemoteConfigService
 import Dependencies
 import Foundation
-import XCTest
+import Testing
 
-final class AppRemoteConfigTests: XCTestCase {
+struct AppRemoteConfigTests {
     
     @MainActor
     class Values {
@@ -19,7 +19,8 @@ final class AppRemoteConfigTests: XCTestCase {
     }
     
     @MainActor
-    func testSomething() async throws {
+    @Test
+    func something() async throws {
         let values = Values()
         let sut = withDependencies {
             $0.date.now = Date(timeIntervalSince1970: 0)
@@ -36,7 +37,7 @@ final class AppRemoteConfigTests: XCTestCase {
         }
         
         let settings = sut.resolve(date: Date(timeIntervalSince1970: 0))
-        XCTAssertEqual(settings.keys.count, 0)
+        #expect(settings.keys.count == 0)
         
         // TODO: More extensive tests
         // Mocking content of config not very feasible this way
