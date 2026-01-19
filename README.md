@@ -32,15 +32,14 @@ import AppRemoteConfig
 let configData = try Data(contentsOf: configURL)
 let config = try JSONDecoder().decode(Config.self, from: configData)
 
-let context = Config.ResolutionContext(
+let resolved = config.resolve(
+    date: Date(),
     platform: .iOS,
     platformVersion: ProcessInfo.processInfo.operatingSystemVersion,
     appVersion: try Version("1.0.0"),
     buildVariant: .release
 )
-
-let resolved = config.resolve(at: Date(), with: context)
-let apiEndpoint = resolved.settings["apiEndpoint"] as? String
+let apiEndpoint = resolved["apiEndpoint"] as? String
 ```
 
 ### AppRemoteConfigProvider
