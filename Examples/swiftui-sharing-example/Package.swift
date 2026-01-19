@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../.."),
-        .package(path: "../../../swift-configuration-sharing"),
+        .package(url: "https://github.com/egeniq/swift-configuration-sharing.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-configuration.git", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.7.4")
     ],
