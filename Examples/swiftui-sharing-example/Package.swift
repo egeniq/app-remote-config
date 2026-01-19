@@ -12,6 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../.."),
+        .package(path: "../../../swift-configuration-sharing"),
         .package(url: "https://github.com/apple/swift-configuration.git", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.7.4")
     ],
@@ -21,7 +22,7 @@ let package = Package(
             dependencies: [
                 .product(name: "AppRemoteConfigProvider", package: "app-remote-config"),
                 .product(name: "AppRemoteConfig", package: "app-remote-config"),
-                .product(name: "ConfigurationSharing", package: "app-remote-config"),
+                .product(name: "ConfigurationSharing", package: "ConfigurationSharing"),
                 .product(name: "Configuration", package: "swift-configuration"),
                 .product(name: "Sharing", package: "swift-sharing")
             ],

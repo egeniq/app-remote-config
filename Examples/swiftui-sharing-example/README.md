@@ -210,7 +210,7 @@ var value: String
 
 ## See Also
 
-- [ConfigurationSharing README](../../Sources/ConfigurationSharing/README.md)
+- [ConfigurationSharing README](../../../swift-configuration-sharing/README.md)
 - [AppRemoteConfigProvider](../../Sources/AppRemoteConfigProvider)
 - [Swift Sharing Documentation](https://github.com/pointfreeco/swift-sharing)
 - [Swift Configuration Documentation](https://github.com/apple/swift-configuration)

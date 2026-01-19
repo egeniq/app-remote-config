@@ -30,10 +30,6 @@ let package = Package(
             name: "AppRemoteConfigServiceMacros",
             targets: ["AppRemoteConfigServiceMacros"]
         ),
-        .library(
-            name: "ConfigurationSharing",
-            targets: ["ConfigurationSharing"]
-        ),
         .executable(
             name: "care",
             targets: ["care"]
@@ -49,7 +45,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
-        .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.7.4"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/swiftlang/swift-syntax", "509.0.0"..<"603.0.0"),
     ],
@@ -126,19 +121,5 @@ let package = Package(
                 .product(name: "Yams", package: "Yams")
             ]
         ),
-        .target(
-            name: "ConfigurationSharing",
-            dependencies: [
-                .product(name: "Configuration", package: "swift-configuration"),
-                .product(name: "Sharing", package: "swift-sharing"),
-            ]
-        ),
-        .testTarget(
-            name: "ConfigurationSharingTests",
-            dependencies: [
-                "ConfigurationSharing",
-                .product(name: "Dependencies", package: "swift-dependencies"),
-            ]
-        )
     ]
 )
