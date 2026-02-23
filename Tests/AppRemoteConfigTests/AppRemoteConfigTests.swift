@@ -78,13 +78,55 @@ final class AppRemoteConfigTests: XCTestCase {
         
         let date = Date(timeIntervalSince1970: 0)
         let config = try Config(json: json)
-        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        let settings = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), variant: "AppStore", buildVariant: .release)
         
         let foo = settings["foo"] as! Bool
         XCTAssertEqual(foo, false)
         
         let bar = settings["bar"] as! String
         XCTAssertEqual(bar, "hello world")
+    }
+    
+    func testVariantConditionDoesNotMatchWhenNoVariant() async throws {
+        let jsonString = """
+        {
+            "settings": {
+                "foo": true
+            },
+            "overrides": [
+                {
+                    "matching": [
+                        {
+                            "variant": "AppStore"
+                        }
+                    ],
+                    "settings": {
+                        "foo": false
+                    }
+                }
+            ]
+        }
+        """
+        let data = jsonString.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as! [String: Sendable]
+        
+        let date = Date(timeIntervalSince1970: 0)
+        let config = try Config(json: json)
+        
+        // No variant provided: the override requiring "AppStore" variant should NOT match
+        let settingsNoVariant = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), buildVariant: .release)
+        let fooNoVariant = settingsNoVariant["foo"] as! Bool
+        XCTAssertEqual(fooNoVariant, true)
+        
+        // Correct variant provided: the override should match
+        let settingsWithVariant = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), variant: "AppStore", buildVariant: .release)
+        let fooWithVariant = settingsWithVariant["foo"] as! Bool
+        XCTAssertEqual(fooWithVariant, false)
+        
+        // Wrong variant provided: the override should NOT match
+        let settingsWrongVariant = try config.resolve(date: date, platform: .iOS_iPhone, platformVersion: OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 1), appVersion: Version("1.0.0"), variant: "TestFlight", buildVariant: .release)
+        let fooWrongVariant = settingsWrongVariant["foo"] as! Bool
+        XCTAssertEqual(fooWrongVariant, true)
     }
     
     func testOverridingWithAppVersion() async throws {

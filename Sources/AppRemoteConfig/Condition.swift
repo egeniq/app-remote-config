@@ -142,7 +142,7 @@ public struct Condition: Sendable {
             return false
         }
         
-        if let variant, let variantToMatch = self.variant, !variantToMatch.contains(variant) {
+        if let variantToMatch = self.variant, variant.map({ !variantToMatch.contains($0) }) ?? true {
             return false
         }
         
