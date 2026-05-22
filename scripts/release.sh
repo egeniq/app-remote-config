@@ -76,18 +76,23 @@ formula_path, version, url, sha256 = ARGV
 
 content = File.read(formula_path)
 
-stable_block = "  stable do\n    url \"#{url}\"\n    sha256 \"#{sha256}\"\n    version \"#{version}\"\n  end"
+stable_block = "  url \"#{url}\"\n  sha256 \"#{sha256}\""
 
 if content =~ /stable do.*?end/m
-    # Update existing stable block
-    content = content.gsub(/[ \t]*stable do\n.*?\n[ \t]*end/m, stable_block)
+    # Remove stable block, replace with flat url/sha256
+    content = content.gsub(/[ \t]*stable do\n.*?\n[ \t]*end\n?/m, "#{stable_block}\n")
+elsif content =~ /^\s*url\s+/
+    # Update existing flat url/sha256
+    content = content.gsub(/^\s*url\s+"[^"]*"\n/, "#{stable_block}\n")
+    content = content.gsub(/^\s*sha256\s+"[^"]*"\n/, '')
+    content = content.gsub(/^\s*version\s+"[^"]*"\n/, '')
 else
-    # Migrate from old-style multi-line url + tag/revision to stable block.
+    # Migrate from old-style multi-line url + tag/revision to flat url/sha256.
     # Remove url (possibly multi-line), tag:, revision:, sha256, and bare version lines.
     content = content.gsub(/^\s*url\s+"[^"]*".*?\n(?:(?:\s+tag:.*\n)|(?:\s+revision:.*\n))*/m, '')
     content = content.gsub(/^\s*(sha256|revision|tag)\s+.*\n/, '')
     content = content.gsub(/^\s*version\s+"[^"]*"\n/, '')
-    # Insert stable block before license/head/depends_on
+    # Insert url/sha256 before license/head/depends_on
     content = content.sub(/(^\s*(?:license|head|depends_on))/, "#{stable_block}\n\n\\1")
 end
 
