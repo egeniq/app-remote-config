@@ -33,8 +33,19 @@ FORMULA_PATH="${HOMEBREW_TAP_PATH}/Formula/care.rb"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-echo "==> Building ${PRODUCT} ${VERSION} for arm64 and x86_64..."
+CARE_SWIFT="${REPO_ROOT}/Sources/care/care.swift"
+
+echo "==> Setting version ${VERSION} in care.swift..."
+sed -i '' "s/version: \"[^\"]*\"/version: \"${VERSION}\"/" "${CARE_SWIFT}"
+
 cd "${REPO_ROOT}"
+if ! git diff --quiet "${CARE_SWIFT}"; then
+    git add "${CARE_SWIFT}"
+    git commit -m "care: bump version to ${VERSION}"
+    git push
+fi
+
+echo "==> Building ${PRODUCT} ${VERSION} for arm64 and x86_64..."
 
 swift build \
     --disable-sandbox \
