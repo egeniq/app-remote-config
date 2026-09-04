@@ -1,9 +1,9 @@
-import Foundation
+public import Foundation
 
 /// A simple but effective way to manage apps remotely. A simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.
 public struct Config: Sendable {
     /// The default settings that an app should use.
-    public let settings: [String: Sendable]
+    public let settings: [String: any Sendable]
     
     /// Keys that are no longer in use, but may still be used by overrides to accomodate older versions of an app.
     public let deprecatedKeys: [String]
@@ -12,13 +12,13 @@ public struct Config: Sendable {
     public let overrides: [Override]
     
     /// Store metadata such as author or last updated date here.
-    public let meta: [String: Sendable]
+    public let meta: [String: any Sendable]
     
     /// Create a config from a JSON like structure
     /// - Parameter json: JSON describing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
-    public init(json: [String: Sendable]) throws {
+    public init(json: [String: any Sendable]) throws {
         if let jsonValue = json["settings"] {
-            guard let dictionary = jsonValue as? [String: Sendable] else {
+            guard let dictionary = jsonValue as? [String: any Sendable] else {
                 throw ConfigError.unexpectedTypeForKey("settings")
             }
             settings = dictionary
@@ -26,14 +26,14 @@ public struct Config: Sendable {
             settings = [:]
         }
         deprecatedKeys = json["deprecatedKeys"] as? [String] ?? []
-        overrides = (json["overrides"] as? [[String: Sendable]])?.map(Override.init(json:)) ?? []
-        meta = json["meta"] as? [String: Sendable] ?? [:]
+        overrides = (json["overrides"] as? [[String: any Sendable]])?.map(Override.init(json:)) ?? []
+        meta = json["meta"] as? [String: any Sendable] ?? [:]
     }
     
     /// Create a config from JSON
     /// - Parameter data: Data containing JSON describing the desired configuration according to this [scheme](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json)
     public init(data: Data) throws {
-        guard let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Sendable] else {
+        guard let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: any Sendable] else {
             throw ConfigError.unexpectedTypeForKey("root")
         }
         try self.init(json: json)

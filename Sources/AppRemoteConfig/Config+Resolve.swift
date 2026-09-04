@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 extension Config {
     
@@ -12,7 +12,7 @@ extension Config {
     ///   - buildVariant: The build variant of the app that runs
     ///   - language: The language in which the app runs
     /// - Returns: Resolved settings
-    public func resolve(date: Date, platform: Platform, platformVersion: OperatingSystemVersion, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [String: Sendable] {
+    public func resolve(date: Date, platform: Platform, platformVersion: OperatingSystemVersion, appVersion: Version, variant: String? = nil, buildVariant: BuildVariant, language: String? = nil) -> [String: any Sendable] {
         overrides.reduce(into: settings) { partialResult, override in
             let isScheduled: Bool
             if let schedule = override.schedule {

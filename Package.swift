@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.4
 
 import CompilerPluginSupport
 import Foundation
@@ -8,10 +8,10 @@ let package = Package(
     name: "AppRemoteConfig",
     defaultLocalization: "en",
     platforms: [
-        .iOS(.v13),
-        .macOS(.v11),
-        .tvOS(.v13),
-        .watchOS(.v6)
+        .iOS(.v15),
+        .macOS(.v12),
+        .tvOS(.v15),
+        .watchOS(.v9)
     ],
     products: [
         .library(
@@ -31,22 +31,42 @@ let package = Package(
             targets: ["care"]
         )
     ],
+    traits: [
+      .trait(
+        name: "Crypto",
+        description: "Support for signing and verifying data"
+      ),
+      .trait(
+        name: "IssueReporting",
+        description: "Surface logical issues as unobtrusive runtime warnings"
+      ),
+      .trait(
+        name: "Logging",
+        description: "Show log messages"
+      ),
+      .default(enabledTraits: ["Crypto", "Logging"])
+    ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.6"),
-        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.0.0"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.17.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
-        .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
-        .package(url: "https://github.com/swiftlang/swift-syntax", "509.0.0"..<"601.0.0"),
+        .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax", "509.0.0"..<"605.0.0"),
     ],
     targets: [
         .target(
             name: "AppRemoteConfig",
             dependencies: [
-                .product(name: "Crypto", package: "swift-crypto"),
-                .product(name: "Logging", package: "swift-log")
+                .product(
+                    name: "Crypto",
+                    package: "swift-crypto",
+                    condition: .when(traits: [
+                        "Crypto"
+                    ])
+                )
             ]
         ),
         .testTarget(
@@ -60,6 +80,13 @@ let package = Package(
             dependencies: [
                 "AppRemoteConfig",
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(
+                    name: "Logging",
+                    package: "swift-log",
+                    condition: .when(traits: [
+                        "Logging"
+                    ])
+                ),
             ]
         ),
         .testTarget(
@@ -72,7 +99,13 @@ let package = Package(
             name: "AppRemoteConfigServiceMacros",
             dependencies: [
                 "AppRemoteConfigServiceMacrosPlugin",
-                .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+                .product(
+                    name: "IssueReporting",
+                    package: "swift-issue-reporting",
+                    condition: .when(traits: [
+                        "IssueReporting"
+                    ])
+                ),
             ]
         ),
         .macro(
@@ -97,5 +130,6 @@ let package = Package(
                 .product(name: "Yams", package: "Yams")
             ]
         )
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

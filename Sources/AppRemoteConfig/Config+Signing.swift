@@ -1,5 +1,6 @@
-import Crypto
-import Foundation
+#if Crypto
+public import Crypto
+public import Foundation
 
 extension Config {
     
@@ -32,4 +33,4 @@ extension Config {
         try self.init(data: configData)
     }
 }
-
+#endif

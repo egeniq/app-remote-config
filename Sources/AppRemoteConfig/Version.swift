@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Version following semantic versioning convention
 public struct Version: Equatable, Comparable, Sendable {

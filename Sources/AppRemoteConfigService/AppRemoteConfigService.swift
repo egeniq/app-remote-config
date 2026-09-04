@@ -1,8 +1,11 @@
 import AppRemoteConfig
+import Combine
 import Crypto
 import Dependencies
-import Foundation
+public import Foundation
+#if Logging
 import Logging
+#endif
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -28,9 +31,11 @@ public final class AppRemoteConfigService: Sendable {
     let appVersion: Version
     let buildVariant: BuildVariant
     let language: String?
-    
+
+#if Logging
     let logger = Logger(label: "app-remote-config.Service")
-    
+#endif
+
     @MainActor
     private(set) var lastSuccessfullFetch: Date?
     
@@ -114,17 +119,17 @@ public final class AppRemoteConfigService: Sendable {
         }
         
         if let bundledConfigURL {
-            logger.debug("Reading bundled fallback")
+            log(.debug, "Reading bundled fallback")
             // This is force unwrapped because the included fallback config must parse without issue
             let data = try! Data(contentsOf: bundledConfigURL)
             try! readConfig(from: data)
         } else {
-            logger.debug("No bundled config provided")
+            log(.debug, "No bundled config provided")
         }
         
         do {
             if let localCacheURL {
-                logger.debug("Reading cache")
+                log(.debug, "Reading cache")
                 let data = try Data(contentsOf: localCacheURL)
                 try readConfig(from: data)
             }
@@ -139,7 +144,7 @@ public final class AppRemoteConfigService: Sendable {
             do {
                 try await update()
             } catch {
-                logger.error("Updating failed \(error)")
+                log(.error, "Updating failed \(error)")
             }
         }
         
@@ -192,26 +197,26 @@ public final class AppRemoteConfigService: Sendable {
         @Dependency(\.date.now) var now
         if let lastSuccessfullFetch {
             guard abs(lastSuccessfullFetch.timeIntervalSinceNow) > minimumRefreshInterval else {
-                logger.debug("Skipping updating from remote: minimum refresh interval not met")
+                log(.debug, "Skipping updating from remote: minimum refresh interval not met")
                 return
             }
             if !enteringForeground {
 #if os(iOS) || os(tvOS)
                 guard UIApplication.shared.applicationState == .background else {
-                    logger.debug("Skipping updating from remote: app in background")
+                    log(.debug, "Skipping updating from remote: app in background")
                     return
                 }
 #endif
             }
         }
-        logger.debug("Updating from remote")
+        log(.debug, "Updating from remote")
         let (data, _) = try await URLSession.shared.data(from: url)
         try readConfig(from: data)
         lastSuccessfullFetch = now
         resolveAndApply(date: now)
         do {
             if let localCacheFolderURL, let localCacheURL {
-                logger.debug("Writing cache to \(localCacheURL)")
+                log(.debug, "Writing cache to \(localCacheURL)")
                 try FileManager.default.createDirectory(at: localCacheFolderURL, withIntermediateDirectories: true)
                 try data.write(to: localCacheURL)
             } else {
@@ -221,11 +226,15 @@ public final class AppRemoteConfigService: Sendable {
             assertionFailure("Failed to cache config data")
         }
         let nextDate = now.addingTimeInterval(automaticRefreshInterval)
-        logger.debug("Next update on date \(nextDate)")
+        log(.debug, "Next update on date \(nextDate)")
         @Dependency(\.mainQueue) var mainQueue
         mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {
             Task {
-                try await self.update()
+                do {
+                    try await self.update()
+                } catch {
+                    self.log(.error, "Updating failed \(error)")
+                }
             }
         }
     }
@@ -252,37 +261,57 @@ public final class AppRemoteConfigService: Sendable {
     
     @MainActor
     private func resolveAndApply(date: Date) {
-        logger.debug("Resolving settings for date \(date)")
+        log(.debug, "Resolving settings for date \(date)")
         let settings = resolve(date: date)
-        logger.debug("Applying settings \(settings)")
+        log(.debug, "Applying settings \(settings)")
         do {
             try apply(settings)
         } catch  {
             switch error {
             case let AppRemoteConfigServiceError.keysMismatch(unhandledKeys, incorrectKeys, missingKeys):
                 if !unhandledKeys.isEmpty {
-                    logger.warning("The key(s) \(unhandledKeys.joined(separator: ", ")) were provided but ignored.")
+                    log(.warning, "The key(s) \(unhandledKeys.joined(separator: ", ")) were provided but ignored.")
                 }
                 
                 if !incorrectKeys.isEmpty {
-                    logger.error("The key(s) \(incorrectKeys.joined(separator: ", ")) were provided but had unexpected value types.")
+                    log(.error, "The key(s) \(incorrectKeys.joined(separator: ", ")) were provided but had unexpected value types.")
                 }
                 
                 if !missingKeys.isEmpty {
-                    logger.warning("The key(s) \(missingKeys.joined(separator: ", ")) were not provided but expected.")
+                    log(.warning, "The key(s) \(missingKeys.joined(separator: ", ")) were not provided but expected.")
                 }
             default:
-                logger.error("Error encounted applying settings: \(error)")
+                log(.error, "Error encounted applying settings: \(error)")
             }
         }
         if let nextDate = nextResolutionDate(after: date) {
-            logger.debug("Next resolve on date \(nextDate)")
+            log(.debug, "Next resolve on date \(nextDate)")
             @Dependency(\.mainQueue) var mainQueue
             mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {
                 self.resolveAndApply(date: nextDate)
             }
         } else {
-            logger.debug("No next resolve needed")
+            log(.debug, "No next resolve needed")
         }
+    }
+
+
+    enum LogLevel {
+        case debug
+        case warning
+        case error
+    }
+
+    private func log(_ level: LogLevel, _ message: String) {
+        #if Logging
+        switch level {
+        case .debug:
+            logger.debug(Logger.Message(stringLiteral: message))
+        case .warning:
+            logger.warning(Logger.Message(stringLiteral: message))
+        case .error:
+            logger.error(Logger.Message(stringLiteral: message))
+        }
+        #endif
     }
 }

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// A schedule describes a period of time.
 ///
@@ -14,7 +14,7 @@ public struct Schedule: Sendable {
     
     nonisolated(unsafe) static let dateFormatter = ISO8601DateFormatter()
     
-    init(json: [String: Sendable]) {
+    init(json: [String: any Sendable]) {
         if let fromJSON = json["from"] {
             if let fromString = fromJSON as? String, let date = Self.dateFormatter.date(from: fromString) {
                 from = date

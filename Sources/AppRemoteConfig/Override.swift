@@ -11,19 +11,19 @@ public struct Override: Sendable {
     public let schedule: Schedule?
     
     /// The additional settings that are applied when the override is applied. The keys should be either in use or listed as deprecated.
-    public let settings: [String: Sendable]
+    public let settings: [String: any Sendable]
     
-    init(json: [String: Sendable]) {
-        let matching = (json["matching"] as? [[String: Sendable]])?.map(Condition.init(json:))
+    init(json: [String: any Sendable]) {
+        let matching = (json["matching"] as? [[String: any Sendable]])?.map(Condition.init(json:))
         self.conditions = matching
         
-        if let schedule = json["schedule"] as? [String: Sendable] {
+        if let schedule = json["schedule"] as? [String: any Sendable] {
             self.schedule = Schedule(json: schedule)
         } else {
             self.schedule = nil
         }
  
-        if let settings = json["settings"] as? [String: Sendable] {
+        if let settings = json["settings"] as? [String: any Sendable] {
             self.settings = settings
         } else {
             settings = [:]
