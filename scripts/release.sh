@@ -47,23 +47,24 @@ fi
 
 echo "==> Building ${PRODUCT} ${VERSION} for arm64 and x86_64..."
 
-swift build \
-    --disable-sandbox \
-    -c release \
-    --product "${PRODUCT}" \
-    --arch arm64
-
-swift build \
-    --disable-sandbox \
-    -c release \
-    --product "${PRODUCT}" \
-    --arch x86_64
+mkdir -p ".build/release-slices"
+for ARCH in arm64 x86_64; do
+    swift build \
+        --disable-sandbox \
+        -c release \
+        --product "${PRODUCT}" \
+        --arch "${ARCH}"
+    # Both architectures share one output directory, so copy each slice right after its build
+    BIN_PATH="$(swift build --disable-sandbox -c release --arch "${ARCH}" --show-bin-path)"
+    cp "${BIN_PATH}/${PRODUCT}" ".build/release-slices/${PRODUCT}-${ARCH}"
+done
 
 echo "==> Creating universal binary..."
 lipo -create \
     -output ".build/${PRODUCT}" \
-    ".build/arm64-apple-macosx/release/${PRODUCT}" \
-    ".build/x86_64-apple-macosx/release/${PRODUCT}"
+    ".build/release-slices/${PRODUCT}-arm64" \
+    ".build/release-slices/${PRODUCT}-x86_64"
+lipo -archs ".build/${PRODUCT}"
 
 echo "==> Packaging..."
 cp ".build/${PRODUCT}" "${PRODUCT}"
@@ -100,8 +101,8 @@ if content =~ /stable do.*?end/m
     content = content.gsub(/[ \t]*stable do\n.*?\n[ \t]*end\n?/m, "#{stable_block}\n")
 elsif content =~ /^\s*url\s+/
     # Update existing flat url/sha256
-    content = content.gsub(/^\s*url\s+"[^"]*"\n/, "#{stable_block}\n")
     content = content.gsub(/^\s*sha256\s+"[^"]*"\n/, '')
+    content = content.gsub(/^\s*url\s+"[^"]*"\n/, "#{stable_block}\n")
     content = content.gsub(/^\s*version\s+"[^"]*"\n/, '')
 else
     # Migrate from old-style multi-line url + tag/revision to flat url/sha256.
