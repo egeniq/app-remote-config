@@ -33,6 +33,7 @@ public final class AppRemoteConfigService: Sendable {
     let platform: Platform
     let platformVersion: OperatingSystemVersion
     let appVersion: Version
+    let variant: String?
     let buildVariant: BuildVariant
     let language: String?
 
@@ -53,6 +54,7 @@ public final class AppRemoteConfigService: Sendable {
     ///   - minimumRefreshInterval: The minimum time interval between refreshes.
     ///   - automaticRefreshInterval: The interval used between refreshes while the app is in the foreground.
     ///   - bundledConfigURL: URL to fallback configuration included in the app in case remote URL is unavailable and not cached.
+    ///   - variant: The variant of the app that runs, used to match variant conditions in the config.
     ///   - bundleIdentifier: Bundle identifier, recommended value is `Bundle.main.bundleIdentifier`
     ///   - apply: Method called with resolved settings for the app to use.
     @MainActor
@@ -62,6 +64,7 @@ public final class AppRemoteConfigService: Sendable {
         minimumRefreshInterval: TimeInterval = 60,
         automaticRefreshInterval: TimeInterval = 300,
         bundledConfigURL: URL? = nil,
+        variant: String? = nil,
         bundleIdentifier: String,
         apply: @escaping @Sendable @MainActor (_ settings: [String: any Sendable]) throws -> ()
     ) {
@@ -70,6 +73,7 @@ public final class AppRemoteConfigService: Sendable {
         self.minimumRefreshInterval = minimumRefreshInterval
         self.automaticRefreshInterval = automaticRefreshInterval
         self.bundledConfigURL = bundledConfigURL
+        self.variant = variant
         self.bundleIdentifier = bundleIdentifier
         self.apply = apply
         
@@ -154,7 +158,7 @@ public final class AppRemoteConfigService: Sendable {
         
 #if os(iOS) || os(tvOS)
         // Trigger update on coming to foreground
-        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: self, queue: .main) { [weak self] _ in
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             Task {
                 do {
@@ -211,7 +215,7 @@ public final class AppRemoteConfigService: Sendable {
             }
             if !enteringForeground {
 #if os(iOS) || os(tvOS)
-                guard UIApplication.shared.applicationState == .background else {
+                guard UIApplication.shared.applicationState != .background else {
                     log(.debug, "Skipping updating from remote: app in background")
                     return
                 }
@@ -255,7 +259,7 @@ public final class AppRemoteConfigService: Sendable {
     /// - Returns: Resolved settings
     @MainActor
     public func resolve(date: Date, variant: String? = nil) -> [String: any Sendable] {
-        config?.resolve(date: date, platform: platform, platformVersion: platformVersion, appVersion: appVersion, buildVariant: buildVariant, language: language) ?? [:]
+        config?.resolve(date: date, platform: platform, platformVersion: platformVersion, appVersion: appVersion, variant: variant ?? self.variant, buildVariant: buildVariant, language: language) ?? [:]
     }
     
     /// Lists all dates on which resolving the config could give other settings
@@ -265,7 +269,7 @@ public final class AppRemoteConfigService: Sendable {
     /// - Returns: List of relevant dates
     @MainActor
     public func nextResolutionDate(after date: Date, variant: String? = nil) -> Date? {
-       config?.relevantResolutionDates(platform: platform, platformVersion: platformVersion, appVersion: appVersion, buildVariant: buildVariant, language: language).first(where: { $0.timeIntervalSince(date) > 0 })
+       config?.relevantResolutionDates(platform: platform, platformVersion: platformVersion, appVersion: appVersion, variant: variant ?? self.variant, buildVariant: buildVariant, language: language).first(where: { $0.timeIntervalSince(date) > 0 })
     }
     
     @MainActor
