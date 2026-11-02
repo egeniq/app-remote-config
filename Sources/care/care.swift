@@ -1,6 +1,10 @@
 import ArgumentParser
 import Foundation
 
+#if !Crypto
+#error("care requires the Crypto trait")
+#endif
+
 @main
 struct Care: ParsableCommand {
     static let configuration = CommandConfiguration(

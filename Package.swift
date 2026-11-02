@@ -1,4 +1,4 @@
-// swift-tools-version: 6.4
+// swift-tools-version: 6.3
 
 import CompilerPluginSupport
 import Foundation
@@ -81,6 +81,13 @@ let package = Package(
                 "AppRemoteConfig",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(
+                    name: "Crypto",
+                    package: "swift-crypto",
+                    condition: .when(traits: [
+                        "Crypto"
+                    ])
+                ),
+                .product(
                     name: "Logging",
                     package: "swift-log",
                     condition: .when(traits: [
@@ -126,6 +133,13 @@ let package = Package(
             name: "care",
             dependencies: [
                 "AppRemoteConfig",
+                .product(
+                    name: "Crypto",
+                    package: "swift-crypto",
+                    condition: .when(traits: [
+                        "Crypto"
+                    ])
+                ),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "Yams", package: "Yams")
             ]

@@ -1,6 +1,8 @@
 import AppRemoteConfig
 import Combine
+#if Crypto
 import Crypto
+#endif
 import Dependencies
 public import Foundation
 #if Logging
@@ -13,6 +15,8 @@ import UIKit
 public enum AppRemoteConfigServiceError: Error {
     case unexpectedType
     case invalidPublicKey
+    /// A public key was provided, but the `Crypto` trait is disabled.
+    case signatureVerificationUnavailable
     case keysMismatch(unhandled: Set<String>, incorrect: Set<String>, missing: Set<String>)
 }
 
@@ -180,11 +184,16 @@ public final class AppRemoteConfigService: Sendable {
     @MainActor
     private func readConfig(from data: Data) throws {
         if let publicKey {
+#if Crypto
             guard let publicKeyData = Data(base64Encoded: publicKey) else {
                 throw AppRemoteConfigServiceError.invalidPublicKey
             }
             let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
             config = try Config(data: data, publicKey: publicKey)
+#else
+            _ = publicKey
+            throw AppRemoteConfigServiceError.signatureVerificationUnavailable
+#endif
         } else {
             config = try Config(data: data)
         }

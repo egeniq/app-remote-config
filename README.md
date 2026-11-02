@@ -14,7 +14,21 @@ The JSON/YAML schema is defined [here](https://raw.githubusercontent.com/egeniq/
 
 Import the package in your `Package.swift` file:
 
-    .package(url: "https://github.com/egeniq/app-remote-config", from: "0.7.0"),
+    .package(url: "https://github.com/egeniq/app-remote-config", from: "0.8.0"),
+
+Requires Swift 6.3 or later (iOS 15, macOS 12, tvOS 15, watchOS 9).
+
+### Traits
+
+Optional features are controlled with [package traits](https://docs.swift.org/swiftpm/documentation/packagemanagerdocs/packagetraits). `Crypto` and `Logging` are enabled by default.
+
+- `Crypto`: support for signing and verifying data. Required by the `care` command line tool.
+- `Logging`: log messages using swift-log.
+- `IssueReporting`: surface logical issues as unobtrusive runtime warnings.
+
+To change them:
+
+    .package(url: "https://github.com/egeniq/app-remote-config", from: "0.8.0", traits: ["Logging"]),
 
 Then a good approach is to create your own `AppRemoteConfigClient`.
 
