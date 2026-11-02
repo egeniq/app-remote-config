@@ -6,7 +6,7 @@
 #
 # Prerequisites:
 #   - gh CLI authenticated
-#   - GitHub release for <version> already exists (or pass --create-release)
+#   - GitHub release for <version> exists; otherwise it is created (after pushing HEAD)
 #   - Homebrew tap checked out at HOMEBREW_TAP_PATH
 #
 # The script:
@@ -74,6 +74,12 @@ SHA256=$(shasum -a 256 "${ARCHIVE}" | awk '{print $1}')
 echo "==> SHA256: ${SHA256}"
 
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
+
+if ! gh release view "${VERSION}" --repo "${REPO}" >/dev/null 2>&1; then
+    echo "==> Creating GitHub release ${VERSION}..."
+    git push
+    gh release create "${VERSION}" --repo "${REPO}" --target "$(git rev-parse HEAD)" --title "${VERSION}" --generate-notes
+fi
 
 echo "==> Uploading ${ARCHIVE} to GitHub release ${VERSION}..."
 gh release upload "${VERSION}" "${ARCHIVE}" --clobber --repo "${REPO}"
