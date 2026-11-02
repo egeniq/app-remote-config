@@ -81,11 +81,26 @@ final class AppRemoteConfigTests: XCTestCase {
     }
     
     @MainActor
-    func testResolveForwardsExplicitVariant() throws {
+    func testChangingVariantReResolvesAndApplies() async throws {
+        let box = LockedBox()
+        let sut = try makeService(variant: nil) { settings in
+            box.set(settings["foo"] as? Bool)
+        }
+        let date = Date(timeIntervalSince1970: 0)
+        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, true)
+        sut.variant = "AppStore"
+        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, false)
+        XCTAssertEqual(box.value, false)
+    }
+    
+    @MainActor
+    func testResolveReflectsVariantChanges() throws {
         let sut = try makeService(variant: nil)
         let date = Date(timeIntervalSince1970: 0)
-        XCTAssertEqual(sut.resolve(date: date, variant: "AppStore")["foo"] as? Bool, false)
-        XCTAssertEqual(sut.resolve(date: date, variant: "Other")["foo"] as? Bool, true)
+        sut.variant = "AppStore"
+        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, false)
+        sut.variant = "Other"
+        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, true)
     }
     
     private let scheduledJSON = """

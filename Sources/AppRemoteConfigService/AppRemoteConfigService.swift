@@ -17,6 +17,8 @@ public enum AppRemoteConfigServiceError: Error {
     case invalidPublicKey
     /// A public key was provided, but the `Crypto` trait is disabled.
     case signatureVerificationUnavailable
+    /// The server responded with a non-successful HTTP status code.
+    case unexpectedResponse(statusCode: Int)
     case keysMismatch(unhandled: Set<String>, incorrect: Set<String>, missing: Set<String>)
 }
 
@@ -33,7 +35,16 @@ public final class AppRemoteConfigService: Sendable {
     let platform: Platform
     let platformVersion: OperatingSystemVersion
     let appVersion: Version
-    let variant: String?
+    /// The variant of the app that runs, used to match variant conditions in the config.
+    /// Changing it re-resolves and applies the settings.
+    @MainActor
+    public var variant: String? {
+        didSet {
+            guard variant != oldValue else { return }
+            @Dependency(\.date.now) var now
+            resolveAndApply(date: now)
+        }
+    }
     let buildVariant: BuildVariant
     let language: String?
 
@@ -42,7 +53,11 @@ public final class AppRemoteConfigService: Sendable {
 #endif
 
     @MainActor
-    private(set) var lastSuccessfullFetch: Date?
+    private(set) var lastSuccessfulFetch: Date?
+    
+    /// Identifies the currently pending periodic refresh so superseded timers become no-ops.
+    @MainActor
+    private var refreshGeneration = 0
     
     @MainActor
     private var config: Config!
@@ -112,7 +127,8 @@ public final class AppRemoteConfigService: Sendable {
         platformVersion = ProcessInfo().operatingSystemVersion
         
         let appVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        appVersion = try! Version(appVersionString)
+        // Fall back to 0.0.0 rather than crashing when the bundle has no parseable version
+        appVersion = (try? Version(appVersionString)) ?? Version(OperatingSystemVersion(majorVersion: 0, minorVersion: 0, patchVersion: 0))
 #if DEBUG
         buildVariant = .debug
 #else
@@ -164,7 +180,7 @@ public final class AppRemoteConfigService: Sendable {
                 do {
                     try await self.update(enteringForeground: true)
                 } catch {
-                    logger.error("Updating failed \(error)")
+                    self.log(.error, "Updating failed \(error)")
                 }
             }
         }
@@ -208,8 +224,10 @@ public final class AppRemoteConfigService: Sendable {
     @MainActor
     public func update(enteringForeground: Bool = false) async throws {
         @Dependency(\.date.now) var now
-        if let lastSuccessfullFetch {
-            guard abs(lastSuccessfullFetch.timeIntervalSinceNow) > minimumRefreshInterval else {
+        // Always keep the periodic refresh alive, also when skipping or failing below
+        scheduleNextRefresh(from: now)
+        if let lastSuccessfulFetch {
+            guard abs(now.timeIntervalSince(lastSuccessfulFetch)) > minimumRefreshInterval else {
                 log(.debug, "Skipping updating from remote: minimum refresh interval not met")
                 return
             }
@@ -223,9 +241,12 @@ public final class AppRemoteConfigService: Sendable {
             }
         }
         log(.debug, "Updating from remote")
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.shared.data(from: url)
+        if let statusCode = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(statusCode) {
+            throw AppRemoteConfigServiceError.unexpectedResponse(statusCode: statusCode)
+        }
         try readConfig(from: data)
-        lastSuccessfullFetch = now
+        lastSuccessfulFetch = now
         resolveAndApply(date: now)
         do {
             if let localCacheFolderURL, let localCacheURL {
@@ -233,16 +254,23 @@ public final class AppRemoteConfigService: Sendable {
                 try FileManager.default.createDirectory(at: localCacheFolderURL, withIntermediateDirectories: true)
                 try data.write(to: localCacheURL)
             } else {
-                assertionFailure("Failed to create local cache URL")
+                log(.error, "Failed to create local cache URL")
             }
         } catch {
-            assertionFailure("Failed to cache config data")
+            log(.error, "Failed to cache config data \(error)")
         }
+    }
+    
+    @MainActor
+    private func scheduleNextRefresh(from now: Date) {
+        refreshGeneration += 1
+        let generation = refreshGeneration
         let nextDate = now.addingTimeInterval(automaticRefreshInterval)
         log(.debug, "Next update on date \(nextDate)")
         @Dependency(\.mainQueue) var mainQueue
-        mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {
-            Task {
+        mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSince(now))) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.refreshGeneration == generation else { return }
                 do {
                     try await self.update()
                 } catch {
@@ -255,21 +283,19 @@ public final class AppRemoteConfigService: Sendable {
     /// Resolves which settings should be used by an app within its context
     /// - Parameters:
     ///   - date: The date at which the settings are used
-    ///   - variant: The variant of the app that runs
     /// - Returns: Resolved settings
     @MainActor
-    public func resolve(date: Date, variant: String? = nil) -> [String: any Sendable] {
-        config?.resolve(date: date, platform: platform, platformVersion: platformVersion, appVersion: appVersion, variant: variant ?? self.variant, buildVariant: buildVariant, language: language) ?? [:]
+    public func resolve(date: Date) -> [String: any Sendable] {
+        config?.resolve(date: date, platform: platform, platformVersion: platformVersion, appVersion: appVersion, variant: variant, buildVariant: buildVariant, language: language) ?? [:]
     }
     
     /// Lists all dates on which resolving the config could give other settings
     /// - Parameters:
     ///   - date: The date at which the settings are used
-    ///   - variant: The variant of the app that runs
     /// - Returns: List of relevant dates
     @MainActor
-    public func nextResolutionDate(after date: Date, variant: String? = nil) -> Date? {
-       config?.relevantResolutionDates(platform: platform, platformVersion: platformVersion, appVersion: appVersion, variant: variant ?? self.variant, buildVariant: buildVariant, language: language).first(where: { $0.timeIntervalSince(date) > 0 })
+    public func nextResolutionDate(after date: Date) -> Date? {
+       config?.relevantResolutionDates(platform: platform, platformVersion: platformVersion, appVersion: appVersion, variant: variant, buildVariant: buildVariant, language: language).first(where: { $0.timeIntervalSince(date) > 0 })
     }
     
     @MainActor
@@ -294,14 +320,14 @@ public final class AppRemoteConfigService: Sendable {
                     log(.warning, "The key(s) \(missingKeys.joined(separator: ", ")) were not provided but expected.")
                 }
             default:
-                log(.error, "Error encounted applying settings: \(error)")
+                log(.error, "Error encountered applying settings: \(error)")
             }
         }
         if let nextDate = nextResolutionDate(after: date) {
             log(.debug, "Next resolve on date \(nextDate)")
             @Dependency(\.mainQueue) var mainQueue
-            mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) {
-                self.resolveAndApply(date: nextDate)
+            mainQueue.schedule(after: .init(.now() + nextDate.timeIntervalSinceNow)) { [weak self] in
+                self?.resolveAndApply(date: nextDate)
             }
         } else {
             log(.debug, "No next resolve needed")
