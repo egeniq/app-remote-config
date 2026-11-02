@@ -114,9 +114,7 @@ RUBY
 cd "${HOMEBREW_TAP_PATH}"
 git --no-pager diff "${FORMULA_PATH}"
 git add "${FORMULA_PATH}"
-git commit -m "care: update to ${VERSION} with universal binary
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+git commit -m "care: update to ${VERSION} with universal binary"
 git push
 
 echo ""
