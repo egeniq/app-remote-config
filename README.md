@@ -6,29 +6,97 @@ Configure apps remotely: A simple but effective way to manage apps remotely.
 
 Create a simple configuration file that is easy to maintain and host, yet provides important flexibility to specify settings based on your needs.
 
+## Contents
+
+- [Schema](#schema)
+- [Modules](#modules)
+  - [AppRemoteConfig (Core)](#appremoteconfig-core)
+  - [Use as a Service](#use-as-a-service)
+    - [AppRemoteConfigService](#appremoteconfigservice)
+    - [AppRemoteConfigClient](#appremoteconfigclient)
+  - [Use as a Swift Configuration Provider](#use-as-a-swift-configuration-provider)
+    - [AppRemoteConfigProvider](#appremoteconfigprovider)
+    - [ConfigurationSharing](#configurationsharing)
+- [CLI Utility](#cli-utility)
+- [Android](#android)
+
 ## Schema
 
 The JSON/YAML schema is defined [here](https://raw.githubusercontent.com/egeniq/app-remote-config/main/Schema/appremoteconfig.schema.json).
 
-## AppRemoteConfigClient
+## Modules
+
+This package provides several modules for different use cases:
+
+### AppRemoteConfig (Core)
+
+The core configuration format, parsing, signing, and resolution logic. This module has no dependencies on Swift Configuration and supports older platforms (iOS 13+).
+
+**Key Features:**
+- Configuration file parsing (JSON/YAML)
+- Signature verification with Curve25519 keys
+- Platform/version/build variant matching
+- Scheduled override resolution
+- No external dependencies except Crypto and Logging
+
+**Example:**
+```swift
+import AppRemoteConfig
+
+let configData = try Data(contentsOf: configURL)
+let config = try JSONDecoder().decode(Config.self, from: configData)
+
+let resolved = config.resolve(
+    date: Date(),
+    platform: .iOS,
+    platformVersion: ProcessInfo.processInfo.operatingSystemVersion,
+    appVersion: try Version("1.0.0"),
+    buildVariant: .release
+)
+let apiEndpoint = resolved["apiEndpoint"] as? String
+```
+
+### Use as a Service
+
+#### AppRemoteConfigService
+
+A service-based approach using macros and Perception. Alternatively, you can use AppRemoteConfigProvider with Swift Configuration (see [AppRemoteConfigProvider](#appremoteconfigprovider)).
+
+The service fetches the configuration, verifies its signature, caches it, refreshes it periodically and calls `apply` with the resolved settings. Use `@AppRemoteConfigValues` to generate the `apply(settings:)` method for your values class.
+
+```swift
+import AppRemoteConfigService
+import AppRemoteConfigServiceMacros
+import Perception
+
+@AppRemoteConfigValues @Perceptible @MainActor
+final class Values {
+    private(set) var updateRecommended: Bool = false
+    private(set) var updateRequired: Bool = false
+}
+
+@MainActor
+let values = Values()
+
+@MainActor
+let service = AppRemoteConfigService(
+    url: URL(string: "https://www.example.com/config.json")!,
+    publicKey: nil,
+    bundledConfigURL: Bundle.main.url(forResource: "appconfig", withExtension: "json"),
+    bundleIdentifier: Bundle.main.bundleIdentifier ?? "Sample",
+    apply: values.apply(settings:)
+)
+```
+
+See [AppRemoteConfigClient](#appremoteconfigclient) for a full dependency-based setup.
+
+#### AppRemoteConfigClient
+
+> **Note:** As an alternative, you can use `AppRemoteConfigProvider` with Swift Configuration, which integrates with modern Swift concurrency and the Swift Configuration ecosystem.
 
 Import the package in your `Package.swift` file:
 
-    .package(url: "https://github.com/egeniq/app-remote-config", from: "0.8.0"),
-
-Requires Swift 6.3 or later (iOS 15, macOS 12, tvOS 15, watchOS 9).
-
-### Traits
-
-Optional features are controlled with [package traits](https://docs.swift.org/swiftpm/documentation/packagemanagerdocs/packagetraits). `Crypto` and `Logging` are enabled by default.
-
-- `Crypto`: support for signing and verifying data. Required by the `care` command line tool.
-- `Logging`: log messages using swift-log.
-- `IssueReporting`: surface logical issues as unobtrusive runtime warnings.
-
-To change them:
-
-    .package(url: "https://github.com/egeniq/app-remote-config", from: "0.8.0", traits: ["Logging"]),
+    .package(url: "https://github.com/egeniq/app-remote-config", from: "0.7.0"),
 
 Then a good approach is to create your own `AppRemoteConfigClient`.
 
@@ -110,6 +178,43 @@ Then your `AppRemoteConfigClient.swift` is something like this:
             service = AppRemoteConfigService(url: url, publicKey: nil, bundledConfigURL: bundledConfigURL, bundleIdentifier: Bundle.main.bundleIdentifier ?? "Sample", apply: values.apply(settings:))
         }
     }
+
+### Use as a Swift Configuration Provider
+
+#### AppRemoteConfigProvider
+
+> **Note:** AppRemoteConfigProvider has been moved to a separate package with higher platform requirements (iOS 18+). See [app-remote-config-provider](https://github.com/egeniq/app-remote-config-provider) for the Swift Configuration integration.
+
+A Swift Configuration provider that fetches and monitors remote configuration with automatic polling, caching, and fallback support. Ideal for apps that need reactive configuration updates with scheduled overrides.
+
+```swift
+// See https://github.com/egeniq/app-remote-config-provider
+import AppRemoteConfigProvider
+
+let provider = try await AppRemoteConfigProvider<JSONSnapshot>(
+    url: configURL,
+    cacheURL: cacheURL,
+    fallbackURL: Bundle.main.url(forResource: "config", withExtension: "json"),
+    pollInterval: .seconds(3600),
+    resolutionContext: context
+)
+
+let reader = ConfigReader(providers: [provider])
+```
+
+#### ConfigurationSharing
+
+> **Note:** ConfigurationSharing is now in a separate package at [swift-configuration-sharing](https://github.com/egeniq/swift-configuration-sharing).
+
+Integrates AppRemoteConfigProvider with Swift Sharing's `@SharedReader` for reactive SwiftUI views.
+
+```swift
+// See https://github.com/egeniq/swift-configuration-sharing
+import ConfigurationSharing
+
+@SharedReader(.configuration("apiEndpoint"))
+var apiEndpoint = "https://api.example.com"
+```
 
 ## CLI Utility
 

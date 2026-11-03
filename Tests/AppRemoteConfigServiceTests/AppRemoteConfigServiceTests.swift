@@ -2,9 +2,10 @@
 import CombineSchedulers
 import Dependencies
 import Foundation
-import XCTest
+import Testing
 
-final class AppRemoteConfigTests: XCTestCase {
+@MainActor
+struct AppRemoteConfigTests {
     
     @MainActor
     class Values {
@@ -19,8 +20,8 @@ final class AppRemoteConfigTests: XCTestCase {
         }
     }
     
-    @MainActor
-    func testSomething() async throws {
+    @Test
+    func something() async throws {
         let values = Values()
         let sut = withDependencies {
             $0.date.now = Date(timeIntervalSince1970: 0)
@@ -38,10 +39,9 @@ final class AppRemoteConfigTests: XCTestCase {
         }
         
         let settings = sut.resolve(date: Date(timeIntervalSince1970: 0))
-        XCTAssertEqual(settings.keys.count, 0)
+        #expect(settings.keys.count == 0)
     }
 
-    @MainActor
     private func makeService(
         variant: String?,
         json: String = """
@@ -56,7 +56,6 @@ final class AppRemoteConfigTests: XCTestCase {
     ) throws -> AppRemoteConfigService {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).json")
         try json.write(to: url, atomically: true, encoding: .utf8)
-        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return withDependencies {
             $0.date.now = Date(timeIntervalSince1970: 0)
             $0.mainQueue = DispatchQueue.test.eraseToAnyScheduler()
@@ -72,35 +71,35 @@ final class AppRemoteConfigTests: XCTestCase {
         }
     }
     
-    @MainActor
-    func testResolveUsesServiceVariant() throws {
+    @Test
+    func resolveUsesServiceVariant() throws {
         let date = Date(timeIntervalSince1970: 0)
-        XCTAssertEqual(try makeService(variant: "AppStore").resolve(date: date)["foo"] as? Bool, false)
-        XCTAssertEqual(try makeService(variant: "TestFlight").resolve(date: date)["foo"] as? Bool, true)
-        XCTAssertEqual(try makeService(variant: nil).resolve(date: date)["foo"] as? Bool, true)
+        #expect(try makeService(variant: "AppStore").resolve(date: date)["foo"] as? Bool == false)
+        #expect(try makeService(variant: "TestFlight").resolve(date: date)["foo"] as? Bool == true)
+        #expect(try makeService(variant: nil).resolve(date: date)["foo"] as? Bool == true)
     }
     
-    @MainActor
-    func testChangingVariantReResolvesAndApplies() async throws {
+    @Test
+    func changingVariantReResolvesAndApplies() async throws {
         let box = LockedBox()
         let sut = try makeService(variant: nil) { settings in
             box.set(settings["foo"] as? Bool)
         }
         let date = Date(timeIntervalSince1970: 0)
-        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, true)
+        #expect(sut.resolve(date: date)["foo"] as? Bool == true)
         sut.variant = "AppStore"
-        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, false)
-        XCTAssertEqual(box.value, false)
+        #expect(sut.resolve(date: date)["foo"] as? Bool == false)
+        #expect(box.value == false)
     }
     
-    @MainActor
-    func testResolveReflectsVariantChanges() throws {
+    @Test
+    func resolveReflectsVariantChanges() throws {
         let sut = try makeService(variant: nil)
         let date = Date(timeIntervalSince1970: 0)
         sut.variant = "AppStore"
-        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, false)
+        #expect(sut.resolve(date: date)["foo"] as? Bool == false)
         sut.variant = "Other"
-        XCTAssertEqual(sut.resolve(date: date)["foo"] as? Bool, true)
+        #expect(sut.resolve(date: date)["foo"] as? Bool == true)
     }
     
     private let scheduledJSON = """
@@ -115,53 +114,51 @@ final class AppRemoteConfigTests: XCTestCase {
     }
     """
     
-    @MainActor
-    func testResolveReturnsBaseSettings() throws {
+    @Test
+    func resolveReturnsBaseSettings() throws {
         let sut = try makeService(variant: nil, json: #"{ "settings": { "foo": 1, "bar": "x" } }"#)
         let settings = sut.resolve(date: Date(timeIntervalSince1970: 0))
-        XCTAssertEqual(settings["foo"] as? Int, 1)
-        XCTAssertEqual(settings["bar"] as? String, "x")
+        #expect(settings["foo"] as? Int == 1)
+        #expect(settings["bar"] as? String == "x")
     }
     
-    @MainActor
-    func testResolveAppliesScheduledOverrideOnlyWithinSchedule() throws {
+    @Test
+    func resolveAppliesScheduledOverrideOnlyWithinSchedule() throws {
         let sut = try makeService(variant: nil, json: scheduledJSON)
-        XCTAssertEqual(sut.resolve(date: Date(timeIntervalSince1970: 0))["foo"] as? Int, 1)
-        XCTAssertEqual(sut.resolve(date: Date(timeIntervalSince1970: 5400))["foo"] as? Int, 2)
-        XCTAssertEqual(sut.resolve(date: Date(timeIntervalSince1970: 10800))["foo"] as? Int, 1)
+        #expect(sut.resolve(date: Date(timeIntervalSince1970: 0))["foo"] as? Int == 1)
+        #expect(sut.resolve(date: Date(timeIntervalSince1970: 5400))["foo"] as? Int == 2)
+        #expect(sut.resolve(date: Date(timeIntervalSince1970: 10800))["foo"] as? Int == 1)
     }
     
-    @MainActor
-    func testNextResolutionDate() throws {
+    @Test
+    func nextResolutionDate() throws {
         let sut = try makeService(variant: nil, json: scheduledJSON)
-        XCTAssertEqual(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 0)), Date(timeIntervalSince1970: 3600))
-        XCTAssertEqual(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 3600)), Date(timeIntervalSince1970: 7200))
-        XCTAssertNil(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 7200)))
+        #expect(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 0)) == Date(timeIntervalSince1970: 3600))
+        #expect(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 3600)) == Date(timeIntervalSince1970: 7200))
+        #expect(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 7200)) == nil)
     }
     
-    @MainActor
-    func testNextResolutionDateIsNilWithoutSchedules() throws {
+    @Test
+    func nextResolutionDateIsNilWithoutSchedules() throws {
         let sut = try makeService(variant: nil)
-        XCTAssertNil(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 0)))
+        #expect(sut.nextResolutionDate(after: Date(timeIntervalSince1970: 0)) == nil)
     }
     
-    @MainActor
-    func testBundledConfigIsAppliedOnInit() async throws {
-        let applied = expectation(description: "settings applied")
-        applied.assertForOverFulfill = false
-        let box = LockedBox()
+    @Test
+    func bundledConfigIsAppliedOnInit() async throws {
+        let (stream, continuation) = AsyncStream.makeStream(of: Bool?.self)
         _ = try makeService(variant: "AppStore") { settings in
-            box.set(settings["foo"] as? Bool)
-            applied.fulfill()
+            continuation.yield(settings["foo"] as? Bool)
         }
-        await fulfillment(of: [applied], timeout: 5)
-        XCTAssertEqual(box.value, false)
+        var iterator = stream.makeAsyncIterator()
+        let applied = await iterator.next()
+        #expect(applied == .some(false))
     }
     
-    @MainActor
-    func testMissingConfigResolvesToEmptySettings() throws {
+    @Test
+    func missingConfigResolvesToEmptySettings() throws {
         let sut = try makeService(variant: nil, json: #"{ "settings": {} }"#)
-        XCTAssertTrue(sut.resolve(date: Date(timeIntervalSince1970: 0)).isEmpty)
+        #expect(sut.resolve(date: Date(timeIntervalSince1970: 0)).isEmpty)
     }
 }
 
