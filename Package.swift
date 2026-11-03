@@ -147,3 +147,18 @@ let package = Package(
     ],
     swiftLanguageModes: [.v6]
 )
+
+func hasEnvironmentVariable(_ name: String) -> Bool {
+    ProcessInfo.processInfo.environment[name] != nil
+}
+
+// AppRemoteConfigService and the macros are not supported on Android, Linux and Windows (they need Combine/Apple frameworks).
+if hasEnvironmentVariable("EXCLUDE_SERVICE") {
+    package.targets.removeAll(where: { $0.name.contains("Service") })
+    package.products.removeAll(where: { $0.name.contains("Service") })
+}
+
+if hasEnvironmentVariable("EXCLUDE_MACROS") {
+    package.targets.removeAll(where: { $0.name.contains("Macros") })
+    package.products.removeAll(where: { $0.name.contains("Macros") })
+}
